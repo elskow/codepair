@@ -22,7 +22,6 @@ func (s *Server) createPeerConnection() (*webrtc.PeerConnection, error) {
 
 func (s *Server) handleSDP(c *websocket.Conn, pc *webrtc.PeerConnection, sdpStr string) {
 	var sessionDescription webrtc.SessionDescription
-
 	if err := json.Unmarshal([]byte(sdpStr), &sessionDescription); err != nil {
 		log.Printf("Failed to unmarshal SDP: %v", err)
 		return
