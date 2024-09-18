@@ -16,14 +16,15 @@ const (
 )
 
 type Server struct {
-	app            *fiber.App
-	peerConnection *webrtc.PeerConnection
-	pcMutex        sync.Mutex
+	app          *fiber.App
+	clients      map[*websocket.Conn]bool
+	clientsMutex sync.Mutex
 }
 
 func NewServer() *Server {
 	return &Server{
-		app: fiber.New(),
+		app:     fiber.New(),
+		clients: make(map[*websocket.Conn]bool),
 	}
 }
 
@@ -43,9 +44,9 @@ func (s *Server) handleWebSocket(c *websocket.Conn) {
 		return
 	}
 
-	s.pcMutex.Lock()
-	s.peerConnection = pc
-	s.pcMutex.Unlock()
+	s.clientsMutex.Lock()
+	s.clients[c] = true
+	s.clientsMutex.Unlock()
 
 	go s.handleICECandidates(ctx, c, pc)
 	s.handleIncomingMessages(ctx, c, pc)
@@ -54,12 +55,10 @@ func (s *Server) handleWebSocket(c *websocket.Conn) {
 	c.SetCloseHandler(func(code int, text string) error {
 		log.Printf("WebSocket closed with code %d: %s", code, text)
 		cancel() // Cancel the context to stop goroutines
-		s.pcMutex.Lock()
-		if s.peerConnection != nil {
-			s.peerConnection.Close() // Close the peer connection
-			s.peerConnection = nil
-		}
-		s.pcMutex.Unlock()
+		s.clientsMutex.Lock()
+		delete(s.clients, c)
+		s.clientsMutex.Unlock()
+		pc.Close() // Close the peer connection
 		return nil
 	})
 }
@@ -79,9 +78,7 @@ func (s *Server) handleICECandidates(ctx context.Context, c *websocket.Conn, pc 
 			return
 		default:
 			log.Printf("Sending ICE candidate: %s", candidateJSON)
-			if err := c.WriteMessage(websocket.TextMessage, candidateJSON); err != nil {
-				log.Printf("Failed to send ICE candidate: %v", err)
-			}
+			s.broadcastMessage(c, candidateJSON)
 		}
 	})
 }
@@ -124,6 +121,22 @@ func (s *Server) handleIncomingMessages(ctx context.Context, c *websocket.Conn, 
 				}
 				log.Printf("Received ICE candidate: %s", candidateStr)
 				s.handleICECandidate(pc, string(candidateStr))
+			}
+
+			// Broadcast the message to other clients
+			s.broadcastMessage(c, msg)
+		}
+	}
+}
+
+func (s *Server) broadcastMessage(sender *websocket.Conn, message []byte) {
+	s.clientsMutex.Lock()
+	defer s.clientsMutex.Unlock()
+
+	for client := range s.clients {
+		if client != sender {
+			if err := client.WriteMessage(websocket.TextMessage, message); err != nil {
+				log.Printf("Failed to send message to client: %v", err)
 			}
 		}
 	}
