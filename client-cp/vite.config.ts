@@ -7,5 +7,9 @@ export default defineConfig({
   server: {
     host: '0.0.0.0', // Listen on all network interfaces
     port: 5173, // Ensure this port is open and not blocked by firewall
+    hmr: {
+      host: "localhost",
+      protocol: "ws",
+    },
   }
 })

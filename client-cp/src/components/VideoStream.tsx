@@ -4,9 +4,10 @@ interface VideoStreamProps {
     stream: MediaStream | null;
     muted?: boolean;
     title?: string;
+    className?: string;
 }
 
-const VideoStream: React.FC<VideoStreamProps> = ({ stream, muted = false, title = '' }) => {
+const VideoStream: React.FC<VideoStreamProps> = ({ stream, muted = false, title = '', className = '' }) => {
     const videoElement = useRef<HTMLVideoElement>(null);
 
     useEffect(() => {
@@ -22,12 +23,7 @@ const VideoStream: React.FC<VideoStreamProps> = ({ stream, muted = false, title 
             autoPlay
             playsInline
             title={title}
-            style={{
-                width: '300px',
-                height: '200px',
-                margin: '10px',
-                backgroundColor: '#ddd',
-            }}
+            className={`w-48 h-32 bg-neutral-800 ${className}`}
         ></video>
     );
 };
