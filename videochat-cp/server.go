@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/compress"
 	"github.com/gofiber/websocket/v2"
 	"github.com/pion/webrtc/v4"
 )
@@ -18,14 +20,25 @@ const (
 type Server struct {
 	app          *fiber.App
 	clients      map[*websocket.Conn]bool
-	clientsMutex sync.Mutex
+	clientsMutex sync.RWMutex
 }
 
 func NewServer() *Server {
-	return &Server{
-		app:     fiber.New(),
+	app := fiber.New(fiber.Config{
+		AppName: "Videochat Modules",
+		Prefork: true,
+	})
+
+	app.Use(compress.New(compress.Config{Level: compress.LevelBestSpeed}))
+
+	server := &Server{
+		app:     app,
 		clients: make(map[*websocket.Conn]bool),
 	}
+
+	go server.removeInactiveClients()
+
+	return server
 }
 
 func (s *Server) setupRoutes() {
@@ -44,9 +57,7 @@ func (s *Server) handleWebSocket(c *websocket.Conn) {
 		return
 	}
 
-	s.clientsMutex.Lock()
-	s.clients[c] = true
-	s.clientsMutex.Unlock()
+	s.addClient(c)
 
 	go s.handleICECandidates(ctx, c, pc)
 	s.handleIncomingMessages(ctx, c, pc)
@@ -55,12 +66,38 @@ func (s *Server) handleWebSocket(c *websocket.Conn) {
 	c.SetCloseHandler(func(code int, text string) error {
 		log.Printf("WebSocket closed with code %d: %s", code, text)
 		cancel() // Cancel the context to stop goroutines
-		s.clientsMutex.Lock()
-		delete(s.clients, c)
-		s.clientsMutex.Unlock()
+		s.removeClient(c)
 		pc.Close() // Close the peer connection
 		return nil
 	})
+}
+
+func (s *Server) addClient(c *websocket.Conn) {
+	s.clientsMutex.Lock()
+	defer s.clientsMutex.Unlock()
+	s.clients[c] = true
+}
+
+func (s *Server) removeClient(c *websocket.Conn) {
+	s.clientsMutex.Lock()
+	defer s.clientsMutex.Unlock()
+	delete(s.clients, c)
+}
+
+func (s *Server) removeInactiveClients() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		s.clientsMutex.Lock()
+		for client := range s.clients {
+			if err := client.WriteMessage(websocket.PingMessage, nil); err != nil {
+				client.Close()
+				delete(s.clients, client)
+			}
+		}
+		s.clientsMutex.Unlock()
+	}
 }
 
 func (s *Server) handleICECandidates(ctx context.Context, c *websocket.Conn, pc *webrtc.PeerConnection) {
@@ -130,8 +167,8 @@ func (s *Server) handleIncomingMessages(ctx context.Context, c *websocket.Conn, 
 }
 
 func (s *Server) broadcastMessage(sender *websocket.Conn, message []byte) {
-	s.clientsMutex.Lock()
-	defer s.clientsMutex.Unlock()
+	s.clientsMutex.RLock()
+	defer s.clientsMutex.RUnlock()
 
 	for client := range s.clients {
 		if client != sender {
