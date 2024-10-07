@@ -12,7 +12,7 @@ import (
 
 type Server struct {
 	clients      map[*websocket.Conn]bool
-	clientsMutex sync.Mutex
+	clientsMutex sync.RWMutex
 	broadcast    chan Message
 }
 
@@ -32,7 +32,7 @@ type Cursor struct {
 func NewServer() *Server {
 	return &Server{
 		clients:   make(map[*websocket.Conn]bool),
-		broadcast: make(chan Message),
+		broadcast: make(chan Message, 20),
 	}
 }
 
@@ -40,7 +40,6 @@ func (s *Server) setupRoutes(app *fiber.App) {
 	app.Get("/ws", websocket.New(s.handleWebSocket))
 	go s.handleMessages()
 }
-
 
 func (s *Server) handleWebSocket(c *websocket.Conn) {
 	defer c.Close()
@@ -95,15 +94,19 @@ func (s *Server) handleIncomingMessages(ctx context.Context, c *websocket.Conn) 
 
 func (s *Server) handleMessages() {
 	for msg := range s.broadcast {
-		s.clientsMutex.Lock()
+		s.clientsMutex.RLock()
 		for client := range s.clients {
-			err := client.WriteJSON(msg)
-			if err != nil {
-				log.Printf("error: %v", err)
-				client.Close()
-				delete(s.clients, client)
-			}
+			go func(client *websocket.Conn) {
+				err := client.WriteJSON(msg)
+				if err != nil {
+					log.Printf("error: %v", err)
+					client.Close()
+					s.clientsMutex.Lock()
+					delete(s.clients, client)
+					s.clientsMutex.Unlock()
+				}
+			}(client)
 		}
-		s.clientsMutex.Unlock()
+		s.clientsMutex.RUnlock()
 	}
 }

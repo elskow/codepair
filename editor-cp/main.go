@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/compress"
 )
 
 const (
@@ -16,7 +17,9 @@ const (
 )
 
 func main() {
-	app := fiber.New()
+	app := fiber.New(fiber.Config{AppName: "PeerEditor Modules"})
+
+	app.Use(compress.New(compress.Config{Level: compress.LevelBestSpeed}))
 
 	server := NewServer()
 	server.setupRoutes(app)
