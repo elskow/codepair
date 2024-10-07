@@ -1,61 +1,13 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React from 'react';
 import { Editor } from '@monaco-editor/react';
 import VideoStream from './components/VideoStream';
 import useWebRTC from './handler/useWebRTC';
+import useEditorPeer from './handler/useEditorPeer';
 import './app.css';
 
 const App: React.FC = () => {
-    const [code, setCode] = useState('// Start coding...');
-    const [language, setLanguage] = useState('javascript');
-    const [ws, setWs] = useState<WebSocket | null>(null);
-
-    const {
-        connectionStatus,
-        localStream,
-        remoteStream,
-    } = useWebRTC();
-
-    useEffect(() => {
-        const socket = new WebSocket('ws://localhost:8080/ws');
-        setWs(socket);
-
-        socket.onmessage = (event) => {
-            const message = JSON.parse(event.data);
-            if (message.type === 'code') {
-                setCode(message.code);
-                setLanguage(message.language);
-            }
-        };
-
-        return () => {
-            socket.close();
-        };
-    }, []);
-
-    const handleEditorChange = useCallback((value: string | undefined) => {
-        if (value !== undefined) {
-            setCode(value);
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({
-                    type: 'code',
-                    code: value,
-                    language: language
-                }));
-            }
-        }
-    }, [ws, language]);
-
-    const handleLanguageChange = useCallback((event: React.ChangeEvent<HTMLSelectElement>) => {
-        const newLanguage = event.target.value;
-        setLanguage(newLanguage);
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-                type: 'code',
-                code: code,
-                language: newLanguage
-            }));
-        }
-    }, [ws, code]);
+    const { connectionStatus, localStream, remoteStream } = useWebRTC();
+    const { code, language, handleEditorChange, handleLanguageChange } = useEditorPeer('ws://localhost:8080/ws');
 
     return (
         <header className='min-h-screen bg-neutral-900 text-white flex flex-col items-center justify-center'>
