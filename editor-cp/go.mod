@@ -3,10 +3,13 @@ module github.com/elskow/codepair/editor-cp
 go 1.23.0
 
 require (
-	github.com/andybalholm/brotli v1.0.5 // indirect
-	github.com/fasthttp/websocket v1.5.3 // indirect
 	github.com/gofiber/fiber/v2 v2.52.5
 	github.com/gofiber/websocket/v2 v2.2.1
+)
+
+require (
+	github.com/andybalholm/brotli v1.0.5 // indirect
+	github.com/fasthttp/websocket v1.5.3 // indirect
 	github.com/google/uuid v1.5.0 // indirect
 	github.com/klauspost/compress v1.17.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect

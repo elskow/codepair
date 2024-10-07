@@ -41,26 +41,29 @@ func (s *Server) setupRoutes(app *fiber.App) {
 	go s.handleMessages()
 }
 
+
 func (s *Server) handleWebSocket(c *websocket.Conn) {
 	defer c.Close()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	s.clientsMutex.Lock()
 	s.clients[c] = true
 	s.clientsMutex.Unlock()
 
-	go s.handleIncomingMessages(ctx, c)
+	for {
+		var msg Message
+		err := c.ReadJSON(&msg)
+		if err != nil {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				log.Printf("error: %v", err)
+			}
+			break
+		}
+		s.broadcast <- msg
+	}
 
-	c.SetCloseHandler(func(code int, text string) error {
-		log.Printf("WebSocket closed with code %d: %s", code, text)
-		cancel()
-		s.clientsMutex.Lock()
-		delete(s.clients, c)
-		s.clientsMutex.Unlock()
-		return nil
-	})
+	s.clientsMutex.Lock()
+	delete(s.clients, c)
+	s.clientsMutex.Unlock()
 }
 
 func (s *Server) handleIncomingMessages(ctx context.Context, c *websocket.Conn) {
@@ -85,31 +88,18 @@ func (s *Server) handleIncomingMessages(ctx context.Context, c *websocket.Conn) 
 				continue
 			}
 
-			if message.Type == "execute" {
-				req := ExecutionRequest{
-					Language: message.Language,
-					Code:     message.Code,
-				}
-				executionResult := executeCode(req)
-				message.Code = executionResult.Output
-				if executionResult.Error != "" {
-					message.Code = executionResult.Error
-				}
-			}
-
 			s.broadcast <- message
 		}
 	}
 }
 
 func (s *Server) handleMessages() {
-	for {
-		msg := <-s.broadcast
+	for msg := range s.broadcast {
 		s.clientsMutex.Lock()
 		for client := range s.clients {
 			err := client.WriteJSON(msg)
 			if err != nil {
-				log.Printf("Failed to send message to client: %v", err)
+				log.Printf("error: %v", err)
 				client.Close()
 				delete(s.clients, client)
 			}
