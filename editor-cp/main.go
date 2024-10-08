@@ -42,11 +42,15 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	server.clientsMutex.Lock()
-	for client := range server.clients {
-		client.Close()
+	server.roomsMutex.Lock()
+	for _, room := range server.rooms {
+		room.clientsMutex.Lock()
+		for client := range room.clients {
+			client.Close()
+		}
+		room.clientsMutex.Unlock()
 	}
-	server.clientsMutex.Unlock()
+	server.roomsMutex.Unlock()
 
 	if err := app.Shutdown(); err != nil {
 		log.Fatalf("Server forced to shutdown: %v", err)

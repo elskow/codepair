@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"log"
 	"sync"
 
@@ -11,9 +10,19 @@ import (
 )
 
 type Server struct {
+	rooms      map[string]*Room
+	roomsMutex sync.RWMutex
+	broadcast  chan RoomMessage
+}
+
+type Room struct {
 	clients      map[*websocket.Conn]bool
 	clientsMutex sync.RWMutex
-	broadcast    chan Message
+}
+
+type RoomMessage struct {
+	RoomID  string  `json:"roomId"`
+	Message Message `json:"message"`
 }
 
 type Message struct {
@@ -31,82 +40,98 @@ type Cursor struct {
 
 func NewServer() *Server {
 	return &Server{
-		clients:   make(map[*websocket.Conn]bool),
-		broadcast: make(chan Message, 20),
+		rooms:     make(map[string]*Room),
+		broadcast: make(chan RoomMessage, 20),
 	}
 }
 
 func (s *Server) setupRoutes(app *fiber.App) {
-	app.Get("/ws", websocket.New(s.handleWebSocket))
+	app.Get("/ws/:roomId", websocket.New(s.handleWebSocket))
 	go s.handleMessages()
 }
 
 func (s *Server) handleWebSocket(c *websocket.Conn) {
 	defer c.Close()
 
-	s.clientsMutex.Lock()
-	s.clients[c] = true
-	s.clientsMutex.Unlock()
-
-	for {
-		var msg Message
-		err := c.ReadJSON(&msg)
-		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("error: %v", err)
-			}
-			break
-		}
-		s.broadcast <- msg
+	roomId := c.Params("roomId")
+	if roomId == "" {
+		log.Println("Room ID is required")
+		return
 	}
 
-	s.clientsMutex.Lock()
-	delete(s.clients, c)
-	s.clientsMutex.Unlock()
+	s.roomsMutex.Lock()
+	if _, exists := s.rooms[roomId]; !exists {
+		s.rooms[roomId] = &Room{
+			clients: make(map[*websocket.Conn]bool),
+		}
+	}
+	room := s.rooms[roomId]
+	s.roomsMutex.Unlock()
+
+	room.clientsMutex.Lock()
+	room.clients[c] = true
+	room.clientsMutex.Unlock()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go s.handleIncomingMessages(ctx, c, roomId)
+
+	<-ctx.Done()
+
+	room.clientsMutex.Lock()
+	delete(room.clients, c)
+	room.clientsMutex.Unlock()
+
+	s.roomsMutex.Lock()
+	if len(room.clients) == 0 {
+		delete(s.rooms, roomId)
+	}
+	s.roomsMutex.Unlock()
 }
 
-func (s *Server) handleIncomingMessages(ctx context.Context, c *websocket.Conn) {
+func (s *Server) handleIncomingMessages(ctx context.Context, c *websocket.Conn, roomId string) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		default:
-			_, msg, err := c.ReadMessage()
+			var msg Message
+			err := c.ReadJSON(&msg)
 			if err != nil {
-				if websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
-					log.Printf("WebSocket closed: %v", err)
-				} else {
-					log.Printf("Failed to read message: %v", err)
+				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+					log.Printf("error: %v", err)
 				}
 				return
 			}
-
-			var message Message
-			if err := json.Unmarshal(msg, &message); err != nil {
-				log.Printf("Failed to unmarshal message: %v", err)
-				continue
-			}
-
-			s.broadcast <- message
+			s.broadcast <- RoomMessage{RoomID: roomId, Message: msg}
 		}
 	}
 }
 
 func (s *Server) handleMessages() {
-	for msg := range s.broadcast {
-		s.clientsMutex.RLock()
-		for client := range s.clients {
+	for roomMsg := range s.broadcast {
+		s.roomsMutex.RLock()
+		room, exists := s.rooms[roomMsg.RoomID]
+		s.roomsMutex.RUnlock()
+
+		if !exists {
+			continue
+		}
+
+		room.clientsMutex.RLock()
+		for client := range room.clients {
 			go func(client *websocket.Conn) {
-				err := client.WriteJSON(msg)
+				err := client.WriteJSON(roomMsg.Message)
 				if err != nil {
 					log.Printf("error: %v", err)
 					client.Close()
-					s.clientsMutex.Lock()
-					delete(s.clients, client)
-					s.clientsMutex.Unlock()
+					room.clientsMutex.Lock()
+					delete(room.clients, client)
+					room.clientsMutex.Unlock()
 				}
 			}(client)
 		}
-		s.clientsMutex.RUnlock()
+		room.clientsMutex.RUnlock()
 	}
 }
