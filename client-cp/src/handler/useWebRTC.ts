@@ -1,9 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 
 const STUN_SERVER_URL = 'stun:stun.l.google.com:19302';
-const WS_URL = 'ws://localhost:3000/ws';
 
-const useWebRTC = () => {
+const useWebRTC = (url: string, roomId: string) => {
     const [connectionStatus, setConnectionStatus] = useState('Disconnected');
     const [localStream, setLocalStream] = useState<MediaStream | null>(null);
     const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
@@ -35,7 +34,8 @@ const useWebRTC = () => {
                 if (event.candidate && ws.current?.readyState === WebSocket.OPEN) {
                     ws.current.send(JSON.stringify({
                         type: 'ice_candidate',
-                        candidate: event.candidate
+                        candidate: event.candidate,
+                        roomId: roomId
                     }));
                 }
             };
@@ -55,7 +55,7 @@ const useWebRTC = () => {
             console.error('Error setting up peer connection:', error);
             setConnectionStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
-    }, []);
+    }, [roomId]);
 
     const createAndSendOffer = async () => {
         if (!peerConnection.current) return;
@@ -65,7 +65,7 @@ const useWebRTC = () => {
             await peerConnection.current.setLocalDescription(offer);
 
             if (ws.current?.readyState === WebSocket.OPEN) {
-                ws.current.send(JSON.stringify({ type: 'offer', sdp: offer.sdp }));
+                ws.current.send(JSON.stringify({ type: 'offer', sdp: offer.sdp, roomId: roomId }));
             }
         } catch (error) {
             console.error('Error creating and sending offer:', error);
@@ -83,7 +83,7 @@ const useWebRTC = () => {
                 await peerConnection.current.setLocalDescription(answer);
 
                 if (ws.current?.readyState === WebSocket.OPEN) {
-                    ws.current.send(JSON.stringify({ type: 'answer', sdp: answer.sdp }));
+                    ws.current.send(JSON.stringify({ type: 'answer', sdp: answer.sdp, roomId: roomId }));
                 }
             }
 
@@ -97,7 +97,7 @@ const useWebRTC = () => {
             console.error('Error handling SDP:', error);
             setConnectionStatus(`SDP Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
-    }, []);
+    }, [roomId]);
 
     const handleICECandidate = useCallback(async (candidateMessage: RTCIceCandidateInit) => {
         if (!peerConnection.current) return;
@@ -115,7 +115,7 @@ const useWebRTC = () => {
     }, []);
 
     useEffect(() => {
-        ws.current = new WebSocket(WS_URL);
+        ws.current = new WebSocket(`${url}/ws/${roomId}`);
 
         ws.current.onmessage = async (event: MessageEvent) => {
             const message = JSON.parse(event.data);
@@ -149,7 +149,7 @@ const useWebRTC = () => {
             setLocalStream(null);
             setRemoteStream(null);
         };
-    }, [handleSDP, handleICECandidate, setupPeerConnection]);
+    }, [handleSDP, handleICECandidate, setupPeerConnection, url, roomId]);
 
     return { connectionStatus, localStream, remoteStream };
 };
