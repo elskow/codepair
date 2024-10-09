@@ -10,6 +10,7 @@ import (
 )
 
 type Server struct {
+	app        *fiber.App
 	rooms      map[string]*Room
 	roomsMutex sync.RWMutex
 	broadcast  chan RoomMessage
@@ -38,15 +39,16 @@ type Cursor struct {
 	Column int `json:"column"`
 }
 
-func NewServer() *Server {
+func NewServer(app *fiber.App) *Server {
 	return &Server{
+		app:       app,
 		rooms:     make(map[string]*Room),
 		broadcast: make(chan RoomMessage, 20),
 	}
 }
 
-func (s *Server) setupRoutes(app *fiber.App) {
-	app.Get("/ws/:roomId", websocket.New(s.handleWebSocket))
+func (s *Server) setupRoutes() {
+	s.app.Get("/ws/:roomId", websocket.New(s.handleWebSocket))
 	go s.handleMessages()
 }
 
@@ -134,4 +136,19 @@ func (s *Server) handleMessages() {
 		}
 		room.clientsMutex.RUnlock()
 	}
+}
+
+func (s *Server) Shutdown(ctx context.Context) error {
+	s.roomsMutex.Lock()
+	defer s.roomsMutex.Unlock()
+
+	for _, room := range s.rooms {
+		room.clientsMutex.Lock()
+		for client := range room.clients {
+			client.Close()
+		}
+		room.clientsMutex.Unlock()
+	}
+
+	return s.app.Shutdown()
 }

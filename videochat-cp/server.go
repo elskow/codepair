@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/compress"
 	"github.com/gofiber/websocket/v2"
 	"github.com/pion/webrtc/v4"
 )
@@ -28,14 +27,7 @@ type Server struct {
 	roomsMutex sync.RWMutex
 }
 
-func NewServer() *Server {
-	app := fiber.New(fiber.Config{
-		AppName: "Videochat Modules",
-		Prefork: true,
-	})
-
-	app.Use(compress.New(compress.Config{Level: compress.LevelBestSpeed}))
-
+func NewServer(app *fiber.App) *Server {
 	server := &Server{
 		app:   app,
 		rooms: make(map[string]*Room),
@@ -216,4 +208,19 @@ func (s *Server) broadcastMessageToRoom(roomID string, sender *websocket.Conn, m
 			}
 		}
 	}
+}
+
+func (s *Server) Shutdown(ctx context.Context) error {
+	s.roomsMutex.Lock()
+	defer s.roomsMutex.Unlock()
+
+	for _, room := range s.rooms {
+		room.mutex.Lock()
+		for client := range room.clients {
+			client.Close()
+		}
+		room.mutex.Unlock()
+	}
+
+	return s.app.Shutdown()
 }

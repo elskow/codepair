@@ -21,8 +21,8 @@ func main() {
 
 	app.Use(compress.New(compress.Config{Level: compress.LevelBestSpeed}))
 
-	server := NewServer()
-	server.setupRoutes(app)
+	server := NewServer(app)
+	server.setupRoutes()
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
@@ -42,17 +42,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	server.roomsMutex.Lock()
-	for _, room := range server.rooms {
-		room.clientsMutex.Lock()
-		for client := range room.clients {
-			client.Close()
-		}
-		room.clientsMutex.Unlock()
-	}
-	server.roomsMutex.Unlock()
-
-	if err := app.Shutdown(); err != nil {
+	if err := server.Shutdown(ctx); err != nil {
 		log.Fatalf("Server forced to shutdown: %v", err)
 	}
 
