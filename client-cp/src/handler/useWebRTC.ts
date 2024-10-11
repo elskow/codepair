@@ -114,6 +114,22 @@ const useWebRTC = (url: string, roomId: string) => {
         }
     }, []);
 
+    const toggleWebcam = () => {
+        if (localStream) {
+            localStream.getVideoTracks().forEach(track => {
+                track.enabled = !track.enabled;
+            });
+        }
+    };
+
+    const toggleMicrophone = () => {
+        if (localStream) {
+            localStream.getAudioTracks().forEach(track => {
+                track.enabled = !track.enabled;
+            });
+        }
+    };
+
     useEffect(() => {
         ws.current = new WebSocket(`${url}/ws/${roomId}`);
 
@@ -151,7 +167,7 @@ const useWebRTC = (url: string, roomId: string) => {
         };
     }, [handleSDP, handleICECandidate, setupPeerConnection, url, roomId]);
 
-    return { connectionStatus, localStream, remoteStream };
+    return { connectionStatus, localStream, remoteStream, toggleWebcam, toggleMicrophone };
 };
 
 export default useWebRTC;
