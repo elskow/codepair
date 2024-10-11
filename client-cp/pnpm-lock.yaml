@@ -11,6 +11,9 @@ importers:
       '@monaco-editor/react':
         specifier: ^4.6.0
         version: 4.6.0(monaco-editor@0.51.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@shiguredo/rnnoise-wasm':
+        specifier: ^2022.2.0
+        version: 2022.2.0
       '@tanstack/react-router':
         specifier: ^1.63.5
         version: 1.63.5(@tanstack/router-generator@1.63.5)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -706,6 +709,9 @@ packages:
     resolution: {integrity: sha512-fOvu7PCQjAj4eWDEuD8Xz5gpzFqXzGlxHZozHP4b9Jxv9APtdxL6STqztDzMLuRXEc4UpXGGhx029Xgm91QBeA==}
     cpu: [x64]
     os: [win32]
+
+  '@shiguredo/rnnoise-wasm@2022.2.0':
+    resolution: {integrity: sha512-WqkBxuqc0WhG1eQW+tKw9asclkysEb9hrbyUieBNiYQnNM9EzNXbNN5o++SwKWou/rsH4LW6LZMe+TpQQtDntg==}
 
   '@tanstack/history@1.61.1':
     resolution: {integrity: sha512-2CqERleeqO3hkhJmyJm37tiL3LYgeOpmo8szqdjgtnnG0z7ZpvzkZz6HkfOr9Ca/ha7mhAiouSvLYuLkM37AMg==}
@@ -2291,6 +2297,8 @@ snapshots:
 
   '@rollup/rollup-win32-x64-msvc@4.21.3':
     optional: true
+
+  '@shiguredo/rnnoise-wasm@2022.2.0': {}
 
   '@tanstack/history@1.61.1': {}
 

@@ -1,28 +1,69 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { Rnnoise } from "@shiguredo/rnnoise-wasm";
 
 const STUN_SERVER_URL = 'stun:stun.l.google.com:19302';
+const FRAME_SIZE = 480;
 
 const useWebRTC = (url: string, roomId: string) => {
     const [connectionStatus, setConnectionStatus] = useState('Disconnected');
     const [localStream, setLocalStream] = useState<MediaStream | null>(null);
     const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+    const [isRNNoiseEnabled, setIsRNNoiseEnabled] = useState(true);
 
     const peerConnection = useRef<RTCPeerConnection | null>(null);
     const ws = useRef<WebSocket | null>(null);
     const remoteStreamRef = useRef<MediaStream>(new MediaStream());
     const iceCandidatesQueue = useRef<RTCIceCandidateInit[]>([]);
+    const audioContext = useRef<AudioContext | null>(null);
+    const denoiseState = useRef<any>(null);
 
     const setupPeerConnection = useCallback(async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-            setLocalStream(stream);
+
+            let processedStream = stream;
+
+            if (isRNNoiseEnabled) {
+                try {
+                    const rnnoise = await Rnnoise.load();
+                    denoiseState.current = rnnoise.createDenoiseState();
+
+                    audioContext.current = new AudioContext();
+                    const sourceNode = audioContext.current.createMediaStreamSource(stream);
+                    const processorNode = audioContext.current.createScriptProcessor(FRAME_SIZE, 1, 1);
+
+                    processorNode.onaudioprocess = (audioProcessingEvent) => {
+                        const inputBuffer = audioProcessingEvent.inputBuffer;
+                        const outputBuffer = audioProcessingEvent.outputBuffer;
+                        const inputData = inputBuffer.getChannelData(0);
+                        const outputData = outputBuffer.getChannelData(0);
+
+                        denoiseState.current.processFrame(inputData);
+
+                        for (let i = 0; i < FRAME_SIZE; i++) {
+                            outputData[i] = inputData[i];
+                        }
+                    };
+
+                    sourceNode.connect(processorNode);
+                    processorNode.connect(audioContext.current.destination);
+                    processedStream = new MediaStream();
+                    processedStream.addTrack(audioContext.current.createMediaStreamDestination().stream.getAudioTracks()[0]);
+                    stream.getVideoTracks().forEach(track => processedStream.addTrack(track));
+                } catch (error) {
+                    setIsRNNoiseEnabled(false);
+                    processedStream = stream;
+                }
+            }
+
+            setLocalStream(processedStream);
 
             peerConnection.current = new RTCPeerConnection({
                 iceServers: [{ urls: STUN_SERVER_URL }]
             });
 
-            stream.getTracks().forEach((track) => {
-                peerConnection.current?.addTrack(track, stream);
+            processedStream.getTracks().forEach((track) => {
+                peerConnection.current?.addTrack(track, processedStream);
             });
 
             peerConnection.current.ontrack = (event: RTCTrackEvent) => {
@@ -55,7 +96,7 @@ const useWebRTC = (url: string, roomId: string) => {
             console.error('Error setting up peer connection:', error);
             setConnectionStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
-    }, [roomId]);
+    }, [roomId, isRNNoiseEnabled]);
 
     const createAndSendOffer = async () => {
         if (!peerConnection.current) return;
@@ -164,8 +205,15 @@ const useWebRTC = (url: string, roomId: string) => {
             localStream?.getTracks().forEach((track) => track.stop());
             setLocalStream(null);
             setRemoteStream(null);
+            if (audioContext.current) {
+                audioContext.current.close();
+            }
+            if (denoiseState.current) {
+                denoiseState.current.destroy();
+            }
         };
     }, [handleSDP, handleICECandidate, setupPeerConnection, url, roomId]);
+
 
     return { connectionStatus, localStream, remoteStream, toggleWebcam, toggleMicrophone };
 };
