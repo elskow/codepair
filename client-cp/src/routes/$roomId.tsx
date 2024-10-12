@@ -1,17 +1,18 @@
 import { useState } from 'react';
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute } from '@tanstack/react-router';
 import useWebRTC from '../handler/useWebRTC';
 import useEditorPeer from '../handler/useEditorPeer';
 import VideoStream from '../components/VideoStream';
 import { Editor } from '@monaco-editor/react';
 import { Video, VideoOff, Mic, MicOff } from 'lucide-react';
+import { SUPPORTED_LANGUAGES } from '../config/languages';
 
 export const Route = createFileRoute('/$roomId')({
   component: Room,
-})
+});
 
 function Room() {
-  const { roomId } = Route.useParams()
+  const { roomId } = Route.useParams();
   const { localStream, remoteStream, toggleWebcam, toggleMicrophone } = useWebRTC('ws://localhost:3000', roomId);
   const { code, language, handleEditorChange, handleLanguageChange } = useEditorPeer('ws://localhost:8080', roomId);
 
@@ -61,15 +62,12 @@ function Room() {
             id="language"
             value={language}
             onChange={handleLanguageChange}
-            className='bg-neutral-800 text-white p-2 rounded hover:bg-neutral-700 text-sm'
+            className='bg-neutral-800 text-white p-2 rounded hover:bg-neutral-700 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200 ease-in-out'
             aria-label="Select programming language"
           >
-            <option value="javascript">JavaScript</option>
-            <option value="typescript">TypeScript</option>
-            <option value="python">Python</option>
-            <option value="java">Java</option>
-            <option value="csharp">C#</option>
-            <option value="cpp">C++</option>
+            {SUPPORTED_LANGUAGES.map(lang => (
+              <option key={lang.value} value={lang.value}>{lang.label}</option>
+            ))}
           </select>
         </div>
         <Editor
@@ -89,5 +87,5 @@ function Room() {
         />
       </section>
     </header>
-  )
+  );
 }
