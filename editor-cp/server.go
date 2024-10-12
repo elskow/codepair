@@ -19,6 +19,8 @@ type Server struct {
 type Room struct {
 	clients      map[*websocket.Conn]bool
 	clientsMutex sync.RWMutex
+	currentCode  string
+	language     string
 }
 
 type RoomMessage struct {
@@ -55,29 +57,38 @@ func (s *Server) setupRoutes() {
 func (s *Server) handleWebSocket(c *websocket.Conn) {
 	defer c.Close()
 
-	roomId := c.Params("roomId")
-	if roomId == "" {
+	roomID := c.Params("roomId")
+	if roomID == "" {
 		log.Println("Room ID is required")
 		return
 	}
 
 	s.roomsMutex.Lock()
-	if _, exists := s.rooms[roomId]; !exists {
-		s.rooms[roomId] = &Room{
+	if _, exists := s.rooms[roomID]; !exists {
+		s.rooms[roomID] = &Room{
 			clients: make(map[*websocket.Conn]bool),
 		}
 	}
-	room := s.rooms[roomId]
+	room := s.rooms[roomID]
 	s.roomsMutex.Unlock()
 
 	room.clientsMutex.Lock()
 	room.clients[c] = true
 	room.clientsMutex.Unlock()
 
+	if room.currentCode != "" {
+		syncMessage := Message{
+			Type:     "sync",
+			Code:     room.currentCode,
+			Language: room.language,
+		}
+		c.WriteJSON(syncMessage)
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go s.handleIncomingMessages(ctx, c, roomId)
+	go s.handleIncomingMessages(ctx, c, roomID)
 
 	<-ctx.Done()
 
@@ -87,12 +98,12 @@ func (s *Server) handleWebSocket(c *websocket.Conn) {
 
 	s.roomsMutex.Lock()
 	if len(room.clients) == 0 {
-		delete(s.rooms, roomId)
+		delete(s.rooms, roomID)
 	}
 	s.roomsMutex.Unlock()
 }
 
-func (s *Server) handleIncomingMessages(ctx context.Context, c *websocket.Conn, roomId string) {
+func (s *Server) handleIncomingMessages(ctx context.Context, c *websocket.Conn, roomID string) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -106,7 +117,17 @@ func (s *Server) handleIncomingMessages(ctx context.Context, c *websocket.Conn, 
 				}
 				return
 			}
-			s.broadcast <- RoomMessage{RoomID: roomId, Message: msg}
+
+			if msg.Type == "code" {
+				s.roomsMutex.RLock()
+				room := s.rooms[roomID]
+				s.roomsMutex.RUnlock()
+
+				room.currentCode = msg.Code
+				room.language = msg.Language
+			}
+
+			s.broadcast <- RoomMessage{RoomID: roomID, Message: msg}
 		}
 	}
 }
