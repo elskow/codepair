@@ -150,5 +150,15 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		room.clientsMutex.Unlock()
 	}
 
-	return s.app.Shutdown()
+	shutdownErr := make(chan error, 1)
+	go func() {
+		shutdownErr <- s.app.Shutdown()
+	}()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case err := <-shutdownErr:
+		return err
+	}
 }
