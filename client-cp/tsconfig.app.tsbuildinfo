@@ -1,1 +1,1 @@
-{"root":["./src/App.tsx","./src/__root.tsx","./src/index.lazy.tsx","./src/main.tsx","./src/room.lazy.tsx","./src/vite-env.d.ts","./src/components/VideoStream.tsx","./src/handler/useEditorPeer.ts","./src/handler/useWebRTC.ts"],"errors":true,"version":"5.6.2"}
+{"root":["./src/main.tsx","./src/routeTree.gen.ts","./src/vite-env.d.ts","./src/components/VideoStream.tsx","./src/handler/useEditorPeer.ts","./src/handler/useWebRTC.ts","./src/routes/$roomId.tsx","./src/routes/__root.tsx","./src/routes/index.lazy.tsx"],"version":"5.6.2"}
