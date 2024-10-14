@@ -13,7 +13,8 @@ import (
 )
 
 const (
-	address = ":3000"
+	address       = ":3000"
+	stunServerURL = "stun:stun.l.google.com:19302"
 )
 
 func main() {

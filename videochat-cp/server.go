@@ -12,10 +12,6 @@ import (
 	"github.com/pion/webrtc/v4"
 )
 
-const (
-	stunServerURL = "stun:stun.l.google.com:19302"
-)
-
 type Room struct {
 	clients map[*websocket.Conn]bool
 	mutex   sync.RWMutex
