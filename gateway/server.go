@@ -146,8 +146,48 @@ func (s *Server) relayMessages(ctx context.Context, src interface{}, dst interfa
 }
 
 func (s *Server) handleEditorWebSocket(c *fiber.Ctx) error {
-	// TODO: Implement proper WebSocket handling for editor
-	return proxyRequest(editorURL)(c)
+	return fiberWebsocket.New(func(conn *fiberWebsocket.Conn) {
+		defer conn.Close()
+
+		roomID := c.Params("roomId")
+		if roomID == "" {
+			log.Println("Room ID is required")
+			return
+		}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		editorURL := fmt.Sprintf("ws://%s/ws/%s", editorURL, roomID)
+		editorConn, err := s.connectToEditorService(editorURL)
+		if err != nil {
+			log.Printf("Failed to connect to editor service: %v", err)
+			return
+		}
+		defer editorConn.Close()
+
+		go s.relayMessages(ctx, conn, editorConn)
+		go s.relayMessages(ctx, editorConn, conn)
+
+		<-ctx.Done()
+	})(c)
+}
+
+func (s *Server) connectToEditorService(url string) (*websocket.Conn, error) {
+	dialer := websocket.Dialer{
+		Proxy:            http.ProxyFromEnvironment,
+		HandshakeTimeout: 45 * time.Second,
+	}
+
+	headers := http.Header{}
+	headers.Add("Origin", "http://localhost:8000")
+
+	conn, _, err := dialer.Dial(url, headers)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to editor service: %v", err)
+	}
+
+	return conn, nil
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
