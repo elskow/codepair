@@ -50,11 +50,23 @@ func (s *Server) setupRoutes() {
 	// TODO: Implement logging and monitoring for all routes
 }
 
+func (s *Server) Shutdown(ctx context.Context) error {
+	return s.app.ShutdownWithContext(ctx)
+}
+
 func (s *Server) handleVideochatWebSocket(c *fiber.Ctx) error {
+	return s.handleWebSocket(c, videochatURL, "roomID")
+}
+
+func (s *Server) handleEditorWebSocket(c *fiber.Ctx) error {
+	return s.handleWebSocket(c, editorURL, "roomId")
+}
+
+func (s *Server) handleWebSocket(c *fiber.Ctx, serviceURL, roomParamName string) error {
 	return fiberWebsocket.New(func(conn *fiberWebsocket.Conn) {
 		defer conn.Close()
 
-		roomID := c.Params("roomID")
+		roomID := c.Params(roomParamName)
 		if roomID == "" {
 			log.Println("Room ID is required")
 			return
@@ -63,22 +75,22 @@ func (s *Server) handleVideochatWebSocket(c *fiber.Ctx) error {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		videochatURL := fmt.Sprintf("ws://%s/ws/%s", videochatURL, roomID)
-		videochatConn, err := s.connectToVideochatService(videochatURL)
+		serviceWSURL := fmt.Sprintf("ws://%s/ws/%s", serviceURL, roomID)
+		serviceConn, err := s.connectToService(serviceWSURL)
 		if err != nil {
-			log.Printf("Failed to connect to videochat service: %v", err)
+			log.Printf("Failed to connect to service: %v", err)
 			return
 		}
-		defer videochatConn.Close()
+		defer serviceConn.Close()
 
-		go s.relayMessages(ctx, conn, videochatConn)
-		go s.relayMessages(ctx, videochatConn, conn)
+		go s.relayMessages(ctx, conn, serviceConn)
+		go s.relayMessages(ctx, serviceConn, conn)
 
 		<-ctx.Done()
 	})(c)
 }
 
-func (s *Server) connectToVideochatService(url string) (*websocket.Conn, error) {
+func (s *Server) connectToService(url string) (*websocket.Conn, error) {
 	dialer := websocket.Dialer{
 		Proxy:            http.ProxyFromEnvironment,
 		HandshakeTimeout: 45 * time.Second,
@@ -89,7 +101,7 @@ func (s *Server) connectToVideochatService(url string) (*websocket.Conn, error) 
 
 	conn, _, err := dialer.Dial(url, headers)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to videochat service: %v", err)
+		return nil, fmt.Errorf("failed to connect to service: %v", err)
 	}
 
 	return conn, nil
@@ -145,34 +157,6 @@ func (s *Server) relayMessages(ctx context.Context, src interface{}, dst interfa
 	}
 }
 
-func (s *Server) handleEditorWebSocket(c *fiber.Ctx) error {
-	return fiberWebsocket.New(func(conn *fiberWebsocket.Conn) {
-		defer conn.Close()
-
-		roomID := c.Params("roomId")
-		if roomID == "" {
-			log.Println("Room ID is required")
-			return
-		}
-
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-
-		editorURL := fmt.Sprintf("ws://%s/ws/%s", editorURL, roomID)
-		editorConn, err := s.connectToEditorService(editorURL)
-		if err != nil {
-			log.Printf("Failed to connect to editor service: %v", err)
-			return
-		}
-		defer editorConn.Close()
-
-		go s.relayMessages(ctx, conn, editorConn)
-		go s.relayMessages(ctx, editorConn, conn)
-
-		<-ctx.Done()
-	})(c)
-}
-
 func (s *Server) connectToEditorService(url string) (*websocket.Conn, error) {
 	dialer := websocket.Dialer{
 		Proxy:            http.ProxyFromEnvironment,
@@ -188,8 +172,4 @@ func (s *Server) connectToEditorService(url string) (*websocket.Conn, error) {
 	}
 
 	return conn, nil
-}
-
-func (s *Server) Shutdown(ctx context.Context) error {
-	return s.app.ShutdownWithContext(ctx)
 }
