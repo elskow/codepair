@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/fasthttp/websocket"
@@ -27,45 +28,32 @@ func (s *Server) setupRoutes() {
 
 	// Videochat module routes
 	videochat := api.Group("/videochat")
-	videochat.Use(func(c *fiber.Ctx) error {
-		if isWebSocketUpgrade(c) {
-			return s.handleVideochatWebSocket(c)
-		}
-		return c.Next()
-	})
+	videochat.Get("/ws/:roomID", fiberWebsocket.New(s.handleVideochatWebSocket()))
 	videochat.All("/*", proxyRequest(videochatURL))
 
 	// Editor module routes
 	editor := api.Group("/editor")
-	editor.Use(func(c *fiber.Ctx) error {
-		if isWebSocketUpgrade(c) {
-			return s.handleEditorWebSocket(c)
-		}
-		return c.Next()
-	})
+	editor.Get("/ws/:roomID", fiberWebsocket.New(s.handleEditorWebSocket()))
 	editor.All("/*", proxyRequest(editorURL))
-
-	// TODO: Implement authentication and authorization middleware
-	// TODO: Add rate limiting middleware
-	// TODO: Implement logging and monitoring for all routes
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
 	return s.app.ShutdownWithContext(ctx)
 }
 
-func (s *Server) handleVideochatWebSocket(c *fiber.Ctx) error {
-	return s.handleWebSocket(c, videochatURL, "roomID")
+func (s *Server) handleVideochatWebSocket() func(*fiberWebsocket.Conn) {
+	return s.handleWebSocket(videochatURL, "roomID")
 }
 
-func (s *Server) handleEditorWebSocket(c *fiber.Ctx) error {
-	return s.handleWebSocket(c, editorURL, "roomId")
+func (s *Server) handleEditorWebSocket() func(*fiberWebsocket.Conn) {
+	return s.handleWebSocket(editorURL, "roomID")
 }
 
-func (s *Server) handleWebSocket(c *fiber.Ctx, serviceURL, roomParamName string) error {
-	return fiberWebsocket.New(func(conn *fiberWebsocket.Conn) {
-		defer conn.Close()
+func (s *Server) handleWebSocket(serviceURL, roomParamName string) func(*fiberWebsocket.Conn) {
+	return func(c *fiberWebsocket.Conn) {
+		defer c.Close()
 
+		// Get roomID from route params
 		roomID := c.Params(roomParamName)
 		if roomID == "" {
 			log.Println("Room ID is required")
@@ -75,7 +63,10 @@ func (s *Server) handleWebSocket(c *fiber.Ctx, serviceURL, roomParamName string)
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		serviceWSURL := fmt.Sprintf("ws://%s/ws/%s", serviceURL, roomID)
+		// Convert http:// to ws:// or https:// to wss://
+		wsURL := convertToWebSocketURL(serviceURL)
+		serviceWSURL := fmt.Sprintf("%s/ws/%s", wsURL, roomID)
+
 		serviceConn, err := s.connectToService(serviceWSURL)
 		if err != nil {
 			log.Printf("Failed to connect to service: %v", err)
@@ -83,11 +74,26 @@ func (s *Server) handleWebSocket(c *fiber.Ctx, serviceURL, roomParamName string)
 		}
 		defer serviceConn.Close()
 
-		go s.relayMessages(ctx, conn, serviceConn)
-		go s.relayMessages(ctx, serviceConn, conn)
+		go s.relayMessages(ctx, c, serviceConn)
+		go s.relayMessages(ctx, serviceConn, c)
 
 		<-ctx.Done()
-	})(c)
+	}
+}
+
+// convertToWebSocketURL converts HTTP URLs to WebSocket URLs
+func convertToWebSocketURL(url string) string {
+	if strings.HasPrefix(url, "https://") {
+		return "wss://" + strings.TrimPrefix(url, "https://")
+	}
+	if strings.HasPrefix(url, "http://") {
+		return "ws://" + strings.TrimPrefix(url, "http://")
+	}
+	// If no prefix, assume ws:// is needed
+	if !strings.HasPrefix(url, "ws://") && !strings.HasPrefix(url, "wss://") {
+		return "ws://" + url
+	}
+	return url
 }
 
 func (s *Server) connectToService(url string) (*websocket.Conn, error) {
@@ -155,21 +161,4 @@ func (s *Server) relayMessages(ctx context.Context, src interface{}, dst interfa
 			}
 		}
 	}
-}
-
-func (s *Server) connectToEditorService(url string) (*websocket.Conn, error) {
-	dialer := websocket.Dialer{
-		Proxy:            http.ProxyFromEnvironment,
-		HandshakeTimeout: 45 * time.Second,
-	}
-
-	headers := http.Header{}
-	headers.Add("Origin", "http://localhost:8000")
-
-	conn, _, err := dialer.Dial(url, headers)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to editor service: %v", err)
-	}
-
-	return conn, nil
 }

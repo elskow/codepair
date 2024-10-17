@@ -11,8 +11,8 @@ import (
 
 var (
 	// TODO: Load these URLs from environment variables or a configuration file
-	videochatURL = "http://localhost:3000"
-	editorURL    = "http://localhost:8080"
+	videochatURL = "ws://localhost:3000"
+	editorURL    = "ws://localhost:8080"
 )
 
 func proxyRequest(target string) fiber.Handler {

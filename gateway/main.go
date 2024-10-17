@@ -43,11 +43,9 @@ func main() {
 	// Health check middleware
 	app.Use(healthcheck.New(healthcheck.Config{
 		LivenessProbe: func(c *fiber.Ctx) bool {
-			// TODO: Implement a more robust liveness check
-			return true
+			return isServiceReachable(videochatURL) && isServiceReachable(editorURL)
 		},
 		ReadinessProbe: func(c *fiber.Ctx) bool {
-			// TODO: Implement a more comprehensive readiness check
 			return isServiceReachable(videochatURL) && isServiceReachable(editorURL)
 		},
 	}))
@@ -75,7 +73,20 @@ func main() {
 }
 
 func isServiceReachable(url string) bool {
-	// TODO: Implement a more sophisticated health check for services
-	_, err := http.Get(url)
-	return err == nil
+	client := http.Client{
+		Timeout: 5 * time.Second,
+	}
+	resp, err := client.Get(url)
+	if err != nil {
+		log.Printf("Service %s is not reachable: %v", url, err)
+		return false
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("Service %s returned non-OK status: %d", url, resp.StatusCode)
+		return false
+	}
+
+	return true
 }
