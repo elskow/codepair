@@ -3,13 +3,13 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"sync"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/websocket/v2"
 	"github.com/pion/webrtc/v4"
+	"go.uber.org/zap"
 )
 
 type Room struct {
@@ -21,12 +21,21 @@ type Server struct {
 	app        *fiber.App
 	rooms      map[string]*Room
 	roomsMutex sync.RWMutex
+	logger     *zap.Logger
 }
 
-func NewServer(app *fiber.App) *Server {
+func (s *Server) getLogger(ctx context.Context) *zap.Logger {
+	if requestID, ok := ctx.Value("requestID").(string); ok {
+		return s.logger.With(zap.String("requestID", requestID))
+	}
+	return s.logger
+}
+
+func NewServer(app *fiber.App, logger *zap.Logger) *Server {
 	server := &Server{
-		app:   app,
-		rooms: make(map[string]*Room),
+		app:    app,
+		rooms:  make(map[string]*Room),
+		logger: logger,
 	}
 
 	go server.removeInactiveClients()
@@ -41,31 +50,40 @@ func (s *Server) setupRoutes() {
 func (s *Server) handleWebSocket(c *websocket.Conn) {
 	defer c.Close()
 
-	roomID := c.Params("roomID")
-	if roomID == "" {
-		log.Println("Room ID is required")
-		return
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	logger := s.getLogger(ctx)
+
+	roomID := c.Params("roomID")
+	if roomID == "" {
+		logger.Error("Room ID is required")
+		return
+	}
+
 	pc, err := s.createPeerConnection()
 	if err != nil {
-		log.Printf("Failed to create peer connection: %v", err)
+		logger.Error("Failed to create peer connection", zap.Error(err))
 		return
 	}
 
 	s.addClientToRoom(roomID, c)
+	logger.Info("Client connected to room", zap.String("roomID", roomID))
 
 	go s.handleICECandidates(ctx, c, pc, roomID)
 	s.handleIncomingMessages(ctx, c, pc, roomID)
 
 	c.SetCloseHandler(func(code int, text string) error {
-		log.Printf("WebSocket closed with code %d: %s", code, text)
+		logger.Info("WebSocket closing",
+			zap.Int("code", code),
+			zap.String("reason", text),
+			zap.String("roomID", roomID))
 		cancel()
 		s.removeClientFromRoom(roomID, c)
-		pc.Close()
+		if err := pc.Close(); err != nil {
+			logger.Error("Failed to close peer connection", zap.Error(err))
+		}
+		logger.Info("Client disconnected", zap.String("roomID", roomID))
 		return nil
 	})
 }
@@ -78,11 +96,15 @@ func (s *Server) addClientToRoom(roomID string, c *websocket.Conn) {
 		s.rooms[roomID] = &Room{
 			clients: make(map[*websocket.Conn]bool),
 		}
+		s.logger.Info("New room created", zap.String("roomID", roomID))
 	}
 
 	s.rooms[roomID].mutex.Lock()
 	defer s.rooms[roomID].mutex.Unlock()
 	s.rooms[roomID].clients[c] = true
+	s.logger.Info("Client added to room",
+		zap.String("roomID", roomID),
+		zap.Int("totalClients", len(s.rooms[roomID].clients)))
 }
 
 func (s *Server) removeClientFromRoom(roomID string, c *websocket.Conn) {
@@ -93,9 +115,13 @@ func (s *Server) removeClientFromRoom(roomID string, c *websocket.Conn) {
 		room.mutex.Lock()
 		defer room.mutex.Unlock()
 		delete(room.clients, c)
+		s.logger.Info("Client removed from room",
+			zap.String("roomID", roomID),
+			zap.Int("remainingClients", len(room.clients)))
 
 		if len(room.clients) == 0 {
 			delete(s.rooms, roomID)
+			s.logger.Info("Room closed due to no clients", zap.String("roomID", roomID))
 		}
 	}
 }
@@ -110,11 +136,15 @@ func (s *Server) removeInactiveClients() {
 			room.mutex.Lock()
 			for client := range room.clients {
 				if err := client.WriteMessage(websocket.PingMessage, nil); err != nil {
+					s.logger.Warn("Inactive client detected, closing connection",
+						zap.String("roomID", roomID),
+						zap.Error(err))
 					client.Close()
 					delete(room.clients, client)
 				}
 			}
 			if len(room.clients) == 0 {
+				s.logger.Info("Removing empty room during cleanup", zap.String("roomID", roomID))
 				delete(s.rooms, roomID)
 			}
 			room.mutex.Unlock()
@@ -124,26 +154,28 @@ func (s *Server) removeInactiveClients() {
 }
 
 func (s *Server) handleICECandidates(ctx context.Context, c *websocket.Conn, pc *webrtc.PeerConnection, roomID string) {
+	logger := s.getLogger(ctx)
+
 	pc.OnICECandidate(func(candidate *webrtc.ICECandidate) {
 		if candidate == nil {
 			return
 		}
 		candidateJSON, err := json.Marshal(candidate.ToJSON())
 		if err != nil {
-			log.Printf("Failed to marshal ICE candidate: %v", err)
+			logger.Error("Failed to marshal ICE candidate", zap.Error(err))
 			return
 		}
 		select {
 		case <-ctx.Done():
 			return
 		default:
-			log.Printf("Sending ICE candidate: %s", candidateJSON)
-			s.broadcastMessageToRoom(roomID, c, candidateJSON)
+			s.broadcastMessageToRoom(ctx, roomID, c, candidateJSON)
 		}
 	})
 }
 
 func (s *Server) handleIncomingMessages(ctx context.Context, c *websocket.Conn, pc *webrtc.PeerConnection, roomID string) {
+	logger := s.getLogger(ctx)
 	for {
 		select {
 		case <-ctx.Done():
@@ -152,43 +184,32 @@ func (s *Server) handleIncomingMessages(ctx context.Context, c *websocket.Conn, 
 			_, msg, err := c.ReadMessage()
 			if err != nil {
 				if websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
-					log.Printf("WebSocket closed: %v", err)
-				} else {
-					log.Printf("Failed to read message: %v", err)
+					return
 				}
 				return
 			}
 
 			var signal map[string]interface{}
+
 			if err := json.Unmarshal(msg, &signal); err != nil {
-				log.Printf("Failed to unmarshal signal: %v", err)
+				logger.Error("Failed to unmarshal signal", zap.Error(err))
 				continue
 			}
 
 			if sdp, ok := signal["sdp"].(map[string]interface{}); ok {
-				sdpStr, err := json.Marshal(sdp)
-				if err != nil {
-					log.Printf("Failed to marshal SDP: %v", err)
-					continue
-				}
-				log.Printf("Received SDP: %s", sdpStr)
-				s.handleSDP(c, pc, string(sdpStr))
+				sdpStr, _ := json.Marshal(sdp)
+				s.handleSDP(ctx, c, pc, string(sdpStr))
 			} else if candidate, ok := signal["candidate"].(map[string]interface{}); ok {
-				candidateStr, err := json.Marshal(candidate)
-				if err != nil {
-					log.Printf("Failed to marshal ICE candidate: %v", err)
-					continue
-				}
-				log.Printf("Received ICE candidate: %s", candidateStr)
-				s.handleICECandidate(pc, string(candidateStr))
+				candidateStr, _ := json.Marshal(candidate)
+				s.handleICECandidate(ctx, pc, string(candidateStr))
 			}
 
-			s.broadcastMessageToRoom(roomID, c, msg)
+			s.broadcastMessageToRoom(ctx, roomID, c, msg)
 		}
 	}
 }
 
-func (s *Server) broadcastMessageToRoom(roomID string, sender *websocket.Conn, message []byte) {
+func (s *Server) broadcastMessageToRoom(ctx context.Context, roomID string, sender *websocket.Conn, message []byte) {
 	s.roomsMutex.RLock()
 	defer s.roomsMutex.RUnlock()
 
@@ -198,9 +219,7 @@ func (s *Server) broadcastMessageToRoom(roomID string, sender *websocket.Conn, m
 
 		for client := range room.clients {
 			if client != sender {
-				if err := client.WriteMessage(websocket.TextMessage, message); err != nil {
-					log.Printf("Failed to send message to client: %v", err)
-				}
+				client.WriteMessage(websocket.TextMessage, message)
 			}
 		}
 	}
