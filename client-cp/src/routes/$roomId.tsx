@@ -14,7 +14,7 @@ export const Route = createFileRoute("/$roomId")({
 function Room() {
   const { roomId } = Route.useParams();
   const { localStream, remoteStream, toggleWebcam, toggleMicrophone } =
-    useWebRTC("ws://localhost:8000/api/webrtc", roomId);
+    useWebRTC("ws://localhost:8000/api/videochat", roomId);
   const { code, language, handleEditorChange, handleLanguageChange } =
     useEditorPeer("ws://localhost:8000/api/editor", roomId);
 

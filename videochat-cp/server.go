@@ -35,7 +35,7 @@ func NewServer(app *fiber.App) *Server {
 }
 
 func (s *Server) setupRoutes() {
-	s.app.Get("/ws/:roomID", websocket.New(s.handleWebSocket))
+	s.app.Get("/:roomID", websocket.New(s.handleWebSocket))
 }
 
 func (s *Server) handleWebSocket(c *websocket.Conn) {
