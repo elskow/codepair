@@ -1,9 +1,10 @@
-package main
+package server
 
 import (
 	"context"
 	"sync"
 
+	"github.com/elskow/codepair/editor-cp/config"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/websocket/v2"
 	"go.uber.org/zap"
@@ -15,6 +16,7 @@ type Server struct {
 	roomsMutex sync.RWMutex
 	broadcast  chan RoomMessage
 	logger     *zap.Logger
+	config     config.Config
 }
 
 type Room struct {
@@ -42,16 +44,17 @@ type Cursor struct {
 	Column int `json:"column"`
 }
 
-func NewServer(app *fiber.App, logger *zap.Logger) *Server {
+func NewServer(app *fiber.App, logger *zap.Logger, config config.Config) *Server {
 	return &Server{
 		app:       app,
 		rooms:     make(map[string]*Room),
 		broadcast: make(chan RoomMessage, 20),
 		logger:    logger,
+		config:    config,
 	}
 }
 
-func (s *Server) setupRoutes() {
+func (s *Server) SetupRoutes() {
 	s.app.Get("/:roomId", websocket.New(s.handleWebSocket))
 	go s.handleMessages()
 }

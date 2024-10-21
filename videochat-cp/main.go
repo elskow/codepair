@@ -34,7 +34,7 @@ func main() {
 	}
 	defer logger.Sync()
 
-	app := fiber.New(fiber.Config{AppName: "PeerEditor Modules"})
+	app := fiber.New(fiber.Config{AppName: "Videochat Modules"})
 
 	app.Use(fiberzap.New(fiberzap.Config{
 		Logger: logger,
