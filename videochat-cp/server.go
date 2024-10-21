@@ -176,10 +176,11 @@ func (s *Server) handleIncomingMessages(ctx context.Context, c *websocket.Conn, 
 		default:
 			_, msg, err := c.ReadMessage()
 			if err != nil {
-				if websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
-					return
+				if websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure, websocket.CloseNoStatusReceived) {
+					logger.Info("WebSocket connection closed", zap.Error(err))
+				} else {
+					logger.Error("Failed to read message", zap.Error(err))
 				}
-				logger.Error("Failed to read message", zap.Error(err))
 				return
 			}
 
@@ -214,7 +215,7 @@ func (s *Server) broadcastMessageToRoom(ctx context.Context, roomID string, send
 		for client := range room.clients {
 			if client != sender {
 				if err := client.WriteMessage(websocket.TextMessage, message); err != nil {
-					s.logger.Error("Failed to write message to client", zap.Error(err))
+					s.logger.Debug("Failed to write message to client", zap.Error(err))
 				}
 			}
 		}
