@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/elskow/codepair/videochat-cp/config"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/websocket/v2"
 	"github.com/pion/webrtc/v4"
@@ -22,13 +23,15 @@ type Server struct {
 	rooms      map[string]*Room
 	roomsMutex sync.RWMutex
 	logger     *zap.Logger
+	config     config.Config
 }
 
-func NewServer(app *fiber.App, logger *zap.Logger) *Server {
+func NewServer(app *fiber.App, logger *zap.Logger, config config.Config) *Server {
 	server := &Server{
 		app:    app,
 		rooms:  make(map[string]*Room),
 		logger: logger,
+		config: config,
 	}
 
 	go server.cleanupInactiveClients()
@@ -36,7 +39,7 @@ func NewServer(app *fiber.App, logger *zap.Logger) *Server {
 	return server
 }
 
-func (s *Server) setupRoutes() {
+func (s *Server) SetupRoutes() {
 	s.app.Get("/:roomID", websocket.New(s.handleWebSocket))
 }
 
@@ -120,7 +123,7 @@ func (s *Server) removeClientFromRoom(roomID string, c *websocket.Conn) {
 }
 
 func (s *Server) cleanupInactiveClients() {
-	ticker := time.NewTicker(5 * time.Minute)
+	ticker := time.NewTicker(s.config.Server.CleanupInterval)
 	defer ticker.Stop()
 
 	for range ticker.C {

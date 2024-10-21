@@ -16,7 +16,10 @@ FROM alpine:3.18
 WORKDIR /root/
 
 COPY --from=builder /app/main .
+COPY config.yaml .
+COPY entrypoint.sh .
 
-EXPOSE 3000
+RUN chmod +x entrypoint.sh
 
-CMD ["./main"]
+ENTRYPOINT ["./entrypoint.sh"]
+CMD ["./main", "--config", "config.yaml"]

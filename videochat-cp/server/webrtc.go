@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"context"
@@ -13,7 +13,7 @@ func (s *Server) createPeerConnection() (*webrtc.PeerConnection, error) {
 	config := webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{
 			{
-				URLs: []string{stunServerURL},
+				URLs: []string{s.config.Server.StunServerURL},
 			},
 		},
 	}
