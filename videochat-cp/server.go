@@ -24,13 +24,6 @@ type Server struct {
 	logger     *zap.Logger
 }
 
-func (s *Server) getLogger(ctx context.Context) *zap.Logger {
-	if requestID, ok := ctx.Value("requestID").(string); ok {
-		return s.logger.With(zap.String("requestID", requestID))
-	}
-	return s.logger
-}
-
 func NewServer(app *fiber.App, logger *zap.Logger) *Server {
 	server := &Server{
 		app:    app,
@@ -38,7 +31,7 @@ func NewServer(app *fiber.App, logger *zap.Logger) *Server {
 		logger: logger,
 	}
 
-	go server.removeInactiveClients()
+	go server.cleanupInactiveClients()
 
 	return server
 }
@@ -70,7 +63,7 @@ func (s *Server) handleWebSocket(c *websocket.Conn) {
 	s.addClientToRoom(roomID, c)
 	logger.Info("Client connected to room", zap.String("roomID", roomID))
 
-	go s.handleICECandidates(ctx, c, pc, roomID)
+	go s.manageICECandidateEvents(ctx, c, pc, roomID)
 	s.handleIncomingMessages(ctx, c, pc, roomID)
 
 	c.SetCloseHandler(func(code int, text string) error {
@@ -126,7 +119,7 @@ func (s *Server) removeClientFromRoom(roomID string, c *websocket.Conn) {
 	}
 }
 
-func (s *Server) removeInactiveClients() {
+func (s *Server) cleanupInactiveClients() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 
@@ -153,7 +146,7 @@ func (s *Server) removeInactiveClients() {
 	}
 }
 
-func (s *Server) handleICECandidates(ctx context.Context, c *websocket.Conn, pc *webrtc.PeerConnection, roomID string) {
+func (s *Server) manageICECandidateEvents(ctx context.Context, c *websocket.Conn, pc *webrtc.PeerConnection, roomID string) {
 	logger := s.getLogger(ctx)
 
 	pc.OnICECandidate(func(candidate *webrtc.ICECandidate) {
@@ -186,6 +179,7 @@ func (s *Server) handleIncomingMessages(ctx context.Context, c *websocket.Conn, 
 				if websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
 					return
 				}
+				logger.Error("Failed to read message", zap.Error(err))
 				return
 			}
 
@@ -201,7 +195,7 @@ func (s *Server) handleIncomingMessages(ctx context.Context, c *websocket.Conn, 
 				s.handleSDP(ctx, c, pc, string(sdpStr))
 			} else if candidate, ok := signal["candidate"].(map[string]interface{}); ok {
 				candidateStr, _ := json.Marshal(candidate)
-				s.handleICECandidate(ctx, pc, string(candidateStr))
+				s.addRemoteICECandidate(ctx, pc, string(candidateStr))
 			}
 
 			s.broadcastMessageToRoom(ctx, roomID, c, msg)
@@ -219,7 +213,9 @@ func (s *Server) broadcastMessageToRoom(ctx context.Context, roomID string, send
 
 		for client := range room.clients {
 			if client != sender {
-				client.WriteMessage(websocket.TextMessage, message)
+				if err := client.WriteMessage(websocket.TextMessage, message); err != nil {
+					s.logger.Error("Failed to write message to client", zap.Error(err))
+				}
 			}
 		}
 	}
@@ -248,4 +244,11 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	case err := <-shutdownErr:
 		return err
 	}
+}
+
+func (s *Server) getLogger(ctx context.Context) *zap.Logger {
+	if requestID, ok := ctx.Value("requestID").(string); ok {
+		return s.logger.With(zap.String("requestID", requestID))
+	}
+	return s.logger
 }

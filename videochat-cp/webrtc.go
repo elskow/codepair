@@ -62,7 +62,7 @@ func (s *Server) handleSDP(ctx context.Context, c *websocket.Conn, pc *webrtc.Pe
 	}
 }
 
-func (s *Server) handleICECandidate(ctx context.Context, pc *webrtc.PeerConnection, candidateStr string) {
+func (s *Server) addRemoteICECandidate(ctx context.Context, pc *webrtc.PeerConnection, candidateStr string) {
 	logger := s.getLogger(ctx)
 
 	var candidate webrtc.ICECandidateInit
@@ -71,5 +71,7 @@ func (s *Server) handleICECandidate(ctx context.Context, pc *webrtc.PeerConnecti
 		return
 	}
 
-	pc.AddICECandidate(candidate)
+	if err := pc.AddICECandidate(candidate); err != nil {
+		logger.Error("Failed to add ICE candidate", zap.Error(err))
+	}
 }

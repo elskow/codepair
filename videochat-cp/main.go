@@ -36,14 +36,6 @@ func main() {
 	}))
 
 	app.Use(requestid.New())
-
-	app.Use(func(c *fiber.Ctx) error {
-		requestID := c.GetRespHeader("X-Request-Id")
-		ctx := context.WithValue(c.Context(), "requestID", requestID)
-		c.SetUserContext(ctx)
-		return c.Next()
-	})
-
 	app.Use(recover.New())
 	app.Use(healthcheck.New())
 	app.Use(compress.New(compress.Config{Level: compress.LevelBestSpeed}))

@@ -17,13 +17,6 @@ type Server struct {
 	logger     *zap.Logger
 }
 
-func (s *Server) getLogger(ctx context.Context) *zap.Logger {
-	if requestID, ok := ctx.Value("requestID").(string); ok {
-		return s.logger.With(zap.String("requestID", requestID))
-	}
-	return s.logger
-}
-
 type Room struct {
 	clients      map[*websocket.Conn]bool
 	clientsMutex sync.RWMutex
@@ -212,4 +205,11 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	case err := <-shutdownErr:
 		return err
 	}
+}
+
+func (s *Server) getLogger(ctx context.Context) *zap.Logger {
+	if requestID, ok := ctx.Value("requestID").(string); ok {
+		return s.logger.With(zap.String("requestID", requestID))
+	}
+	return s.logger
 }
