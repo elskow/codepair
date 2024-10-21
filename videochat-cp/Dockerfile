@@ -8,23 +8,15 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o main .
 
-FROM alpine:3.18
-
-RUN adduser -D appuser
+FROM gcr.io/distroless/static
 
 WORKDIR /app
 
 COPY --from=builder /app/main .
 COPY config.yaml .
-COPY scripts/entrypoint.sh .
 
-RUN chown -R appuser:appuser /app && \
-    chmod +x entrypoint.sh
+USER nonroot:nonroot
 
-USER appuser
-
-ENTRYPOINT ["./entrypoint.sh"]
 CMD ["./main", "--config", "config.yaml"]
