@@ -17,7 +17,23 @@ func (s *Server) createPeerConnection() (*webrtc.PeerConnection, error) {
 			},
 		},
 	}
-	return webrtc.NewPeerConnection(config)
+
+	m := &webrtc.MediaEngine{}
+	if err := m.RegisterDefaultCodecs(); err != nil {
+		return nil, err
+	}
+
+	if err := m.RegisterCodec(webrtc.RTPCodecParameters{
+		RTPCodecCapability: webrtc.RTPCodecCapability{
+			MimeType: webrtc.MimeTypeVP9, ClockRate: 90000,
+			Channels: 0, SDPFmtpLine: "", RTCPFeedback: nil},
+		PayloadType: 96}, webrtc.RTPCodecTypeVideo); err != nil {
+		return nil, err
+	}
+
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(m))
+
+	return api.NewPeerConnection(config)
 }
 
 func (s *Server) handleSDP(ctx context.Context, c *websocket.Conn, pc *webrtc.PeerConnection, sdpStr string) {
@@ -72,6 +88,6 @@ func (s *Server) addRemoteICECandidate(ctx context.Context, pc *webrtc.PeerConne
 	}
 
 	if err := pc.AddICECandidate(candidate); err != nil {
-		logger.Error("Failed to add ICE candidate", zap.Error(err))
+		logger.Debug("Failed to add ICE candidate", zap.Error(err))
 	}
 }
