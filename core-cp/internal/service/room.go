@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"time"
 
 	"github.com/elskow/codepair/core-cp/internal/domain"
 	"github.com/google/uuid"
@@ -38,25 +37,19 @@ func (s *roomService) DeleteRoom(ctx context.Context, id uuid.UUID) error {
 
 func (s *roomService) JoinRoom(ctx context.Context, userID, roomID uuid.UUID) error {
 	// Check if room exists
-	room, err := s.roomRepo.FindByID(ctx, roomID)
+	_, err := s.roomRepo.FindByID(ctx, roomID)
 	if err != nil {
 		return err
 	}
 
 	// Check if user exists
-	user, err := s.userRepo.FindByID(ctx, userID)
+	_, err = s.userRepo.FindByID(ctx, userID)
 	if err != nil {
 		return err
 	}
 
-	userRoom := &domain.UserRoom{
-		UserID:   user.ID,
-		RoomID:   room.ID,
-		Role:     "member",
-		JoinedAt: time.Now(),
-	}
-
-	return s.roomRepo.AddUserToRoom(ctx, userRoom)
+	// Add user to room with "member" role
+	return s.roomRepo.AddUserToRoom(ctx, userID, roomID, "member")
 }
 
 func (s *roomService) LeaveRoom(ctx context.Context, userID, roomID uuid.UUID) error {

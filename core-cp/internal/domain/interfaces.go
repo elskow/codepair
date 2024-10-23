@@ -20,9 +20,10 @@ type RoomRepository interface {
 	FindByUser(ctx context.Context, userID uuid.UUID) ([]Room, error)
 	Update(ctx context.Context, room *Room) error
 	Delete(ctx context.Context, id uuid.UUID) error
-	AddUserToRoom(ctx context.Context, userRoom *UserRoom) error
+	AddUserToRoom(ctx context.Context, userID, roomID uuid.UUID, role string) error
 	RemoveUserFromRoom(ctx context.Context, userID, roomID uuid.UUID) error
 	UpdateUserRole(ctx context.Context, userID, roomID uuid.UUID, role string) error
+	GetUserRole(ctx context.Context, userID, roomID uuid.UUID) (string, error)
 }
 
 type AuthService interface {

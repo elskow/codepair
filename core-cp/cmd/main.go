@@ -93,6 +93,12 @@ func main() {
 	rooms.Post("/:roomId/join", roomHandler.JoinRoom)
 	rooms.Post("/:roomId/leave", roomHandler.LeaveRoom)
 
+	// Admin routes
+	admin := rooms.Group("/:roomId/admin", authMiddleware.RequireRole("admin", "owner"))
+	admin.Put("/", roomHandler.UpdateRoom)
+	admin.Delete("/", roomHandler.DeleteRoom)
+	admin.Put("/users/:userId/role", roomHandler.UpdateUserRole)
+
 	// Graceful shutdown setup
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
