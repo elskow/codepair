@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/elskow/codepair/core-cp/config"
 	"github.com/elskow/codepair/core-cp/internal/domain"
@@ -71,8 +72,9 @@ func TestAuthService_Login(t *testing.T) {
 	mockRepo := new(mockUserRepository)
 	cfg := &config.Config{
 		JWT: config.JWTConfig{
-			Secret:      "test-secret",
-			TokenExpiry: 24 * 60 * 60,
+			Secret:             "test-secret",
+			TokenExpiry:        24 * time.Hour,
+			RefreshTokenExpiry: 7 * 24 * time.Hour,
 		},
 	}
 	authService := NewAuthService(mockRepo, cfg)
@@ -90,9 +92,10 @@ func TestAuthService_Login(t *testing.T) {
 
 	mockRepo.On("FindByEmail", ctx, email).Return(user, nil)
 
-	token, err := authService.Login(ctx, email, password)
+	accessToken, refreshToken, err := authService.Login(ctx, email, password)
 
 	assert.NoError(t, err)
-	assert.NotEmpty(t, token)
+	assert.NotEmpty(t, accessToken)
+	assert.NotEmpty(t, refreshToken)
 	mockRepo.AssertExpectations(t)
 }

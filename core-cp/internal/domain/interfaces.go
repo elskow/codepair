@@ -28,8 +28,10 @@ type RoomRepository interface {
 
 type AuthService interface {
 	Register(ctx context.Context, user *User) error
-	Login(ctx context.Context, email, password string) (string, error)
+	Login(ctx context.Context, email, password string) (string, string, error) // Returns access token, refresh token, and error
 	ValidateToken(ctx context.Context, token string) (*User, error)
+	RefreshToken(ctx context.Context, refreshToken string) (string, string, error)
+	RevokeToken(ctx context.Context, token string) error
 }
 
 type RoomService interface {

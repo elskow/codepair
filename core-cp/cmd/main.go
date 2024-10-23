@@ -85,6 +85,8 @@ func main() {
 	auth := api.Group("/auth")
 	auth.Post("/register", authHandler.Register)
 	auth.Post("/login", authHandler.Login)
+	auth.Post("/refresh", authHandler.RefreshToken)
+	auth.Post("/revoke", authMiddleware.RequireAuth(), authHandler.RevokeToken)
 
 	// Protected routes
 	rooms := api.Group("/rooms", authMiddleware.RequireAuth())
