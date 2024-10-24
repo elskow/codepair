@@ -11,7 +11,7 @@ import (
 
 func NewConnection(dsn string) (*gorm.DB, error) {
 	config := &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info),
+		Logger: logger.Default.LogMode(logger.Silent),
 	}
 
 	db, err := gorm.Open(postgres.Open(dsn), config)
@@ -28,6 +28,11 @@ func NewConnection(dsn string) (*gorm.DB, error) {
 	sqlDB.SetMaxIdleConns(10)
 	sqlDB.SetMaxOpenConns(100)
 	sqlDB.SetConnMaxLifetime(time.Hour)
+
+	// Run migrations
+	if err := AutoMigrate(db); err != nil {
+		return nil, fmt.Errorf("failed to run migrations: %w", err)
+	}
 
 	return db, nil
 }

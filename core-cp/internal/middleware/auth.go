@@ -92,11 +92,9 @@ func LoggerMiddleware(logger *zap.Logger) fiber.Handler {
 // CORS middleware configuration
 func CORSMiddleware() fiber.Handler {
 	return cors.New(cors.Config{
-		AllowOrigins:     "*",
-		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS",
-		AllowHeaders:     "Origin,Content-Type,Accept,Authorization",
-		AllowCredentials: true,
-		MaxAge:           300,
+		AllowMethods: "GET,POST,PUT,DELETE,OPTIONS",
+		AllowHeaders: "Origin,Content-Type,Accept,Authorization",
+		MaxAge:       300,
 	})
 }
 
@@ -117,66 +115,66 @@ func RateLimiterMiddleware() fiber.Handler {
 }
 
 func (m *AuthMiddleware) userHasRoleInRoom(userID uuid.UUID, roomID string, requiredRole string) bool {
-    roomUUID, err := uuid.Parse(roomID)
-    if err != nil {
-        m.logger.Error("invalid room ID",
-            zap.String("roomId", roomID),
-            zap.Error(err),
-        )
-        return false
-    }
+	roomUUID, err := uuid.Parse(roomID)
+	if err != nil {
+		m.logger.Error("invalid room ID",
+			zap.String("roomId", roomID),
+			zap.Error(err),
+		)
+		return false
+	}
 
-    role, err := m.userRoomRepo.GetUserRole(userID, roomUUID)
-    if err != nil {
-        m.logger.Error("failed to get user role",
-            zap.String("userId", userID.String()),
-            zap.String("roomId", roomID),
-            zap.Error(err),
-        )
-        return false
-    }
+	role, err := m.userRoomRepo.GetUserRole(userID, roomUUID)
+	if err != nil {
+		m.logger.Error("failed to get user role",
+			zap.String("userId", userID.String()),
+			zap.String("roomId", roomID),
+			zap.Error(err),
+		)
+		return false
+	}
 
-    // Check if the user's role matches the required role
-    switch requiredRole {
-    case "owner":
-        return role == "owner"
-    case "admin":
-        return role == "owner" || role == "admin"
-    case "member":
-        return role == "owner" || role == "admin" || role == "member"
-    default:
-        m.logger.Error("invalid role requirement",
-            zap.String("requiredRole", requiredRole),
-        )
-        return false
-    }
+	// Check if the user's role matches the required role
+	switch requiredRole {
+	case "owner":
+		return role == "owner"
+	case "admin":
+		return role == "owner" || role == "admin"
+	case "member":
+		return role == "owner" || role == "admin" || role == "member"
+	default:
+		m.logger.Error("invalid role requirement",
+			zap.String("requiredRole", requiredRole),
+		)
+		return false
+	}
 }
 
 func (m *AuthMiddleware) RequireRole(roles ...string) fiber.Handler {
-    return func(c *fiber.Ctx) error {
-        user := c.Locals("user").(*domain.User)
-        roomID := c.Params("roomId")
+	return func(c *fiber.Ctx) error {
+		user := c.Locals("user").(*domain.User)
+		roomID := c.Params("roomId")
 
-        // Check if user has required role in the room
-        hasRole := false
-        for _, role := range roles {
-            if m.userHasRoleInRoom(user.ID, roomID, role) {
-                hasRole = true
-                break
-            }
-        }
+		// Check if user has required role in the room
+		hasRole := false
+		for _, role := range roles {
+			if m.userHasRoleInRoom(user.ID, roomID, role) {
+				hasRole = true
+				break
+			}
+		}
 
-        if !hasRole {
-            m.logger.Info("insufficient permissions",
-                zap.String("userId", user.ID.String()),
-                zap.String("roomId", roomID),
-                zap.Strings("requiredRoles", roles),
-            )
-            return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-                "error": "insufficient permissions",
-            })
-        }
+		if !hasRole {
+			m.logger.Info("insufficient permissions",
+				zap.String("userId", user.ID.String()),
+				zap.String("roomId", roomID),
+				zap.Strings("requiredRoles", roles),
+			)
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "insufficient permissions",
+			})
+		}
 
-        return c.Next()
-    }
+		return c.Next()
+	}
 }
