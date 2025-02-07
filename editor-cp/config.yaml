@@ -1,3 +1,0 @@
-server:
-  address: ":8080"
-  shutdownTimeout: "5s"

@@ -8,8 +8,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/elskow/codepair/editor-cp/config"
-	"github.com/elskow/codepair/editor-cp/server"
+	"github.com/elskow/codepair/peer-cp/config"
+	"github.com/elskow/codepair/peer-cp/server"
 	"github.com/gofiber/contrib/fiberzap/v2"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/compress"
@@ -34,20 +34,24 @@ func main() {
 	}
 	defer logger.Sync()
 
-	app := fiber.New(fiber.Config{AppName: "PeerEditor Modules"})
+	app := fiber.New(fiber.Config{
+		AppName: "CodePair Peer Service",
+	})
 
 	app.Use(fiberzap.New(fiberzap.Config{
 		Logger: logger,
 	}))
-
 	app.Use(recover.New())
 	app.Use(requestid.New())
 	app.Use(healthcheck.New())
-	app.Use(compress.New(compress.Config{Level: compress.LevelBestSpeed}))
+	app.Use(compress.New(compress.Config{
+		Level: compress.LevelBestSpeed,
+	}))
 
-	server := server.NewServer(app, logger, config)
-	server.SetupRoutes()
+	srv := server.NewServer(app, logger, config)
+	srv.SetupRoutes()
 
+	// Graceful shutdown setup
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
@@ -66,10 +70,9 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), config.Server.ShutdownTimeout)
 	defer cancel()
 
-	if err := server.Shutdown(ctx); err != nil {
+	if err := srv.Shutdown(ctx); err != nil {
 		logger.Error("Server forced to shutdown", zap.Error(err))
 	}
 
-	<-ctx.Done()
 	logger.Info("Server stopped gracefully")
 }

@@ -1,5 +1,5 @@
 server:
-  address: ":3000"
+  address: ":8080"
   stunServerURL: "stun:stun.l.google.com:19302"
   cleanupInterval: "5m"
   shutdownTimeout: "5s"
