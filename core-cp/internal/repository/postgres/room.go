@@ -22,54 +22,28 @@ func (r *roomRepository) Create(ctx context.Context, room *domain.Room) error {
 
 func (r *roomRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.Room, error) {
 	var room domain.Room
-	err := r.db.WithContext(ctx).
-		Preload("Users").
-		First(&room, "id = ?", id).Error
+	err := r.db.WithContext(ctx).First(&room, "id = ?", id).Error
 	if err != nil {
 		return nil, err
 	}
 	return &room, nil
 }
 
-func (r *roomRepository) FindByUser(ctx context.Context, userID uuid.UUID) ([]domain.Room, error) {
+func (r *roomRepository) FindByToken(ctx context.Context, token string) (*domain.Room, error) {
+	var room domain.Room
+	err := r.db.WithContext(ctx).Where("token = ?", token).First(&room).Error
+	if err != nil {
+		return nil, err
+	}
+	return &room, nil
+}
+
+func (r *roomRepository) FindByInterviewer(ctx context.Context, interviewerID uuid.UUID) ([]domain.Room, error) {
 	var rooms []domain.Room
-	err := r.db.WithContext(ctx).
-		Joins("JOIN user_rooms ON rooms.id = user_rooms.room_id").
-		Where("user_rooms.user_id = ?", userID).
-		Find(&rooms).Error
+	err := r.db.WithContext(ctx).Where("interviewer_id = ?", interviewerID).Find(&rooms).Error
 	return rooms, err
 }
 
-func (r *roomRepository) Update(ctx context.Context, room *domain.Room) error {
-	return r.db.WithContext(ctx).Save(room).Error
-}
-
-func (r *roomRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	return r.db.WithContext(ctx).Delete(&domain.Room{}, "id = ?", id).Error
-}
-
-func (r *roomRepository) AddUserToRoom(ctx context.Context, userID, roomID uuid.UUID, role string) error {
-	userRoom := domain.UserRoom{
-		UserID: userID,
-		RoomID: roomID,
-		Role:   role,
-	}
-	return r.db.WithContext(ctx).Create(&userRoom).Error
-}
-
-func (r *roomRepository) RemoveUserFromRoom(ctx context.Context, userID, roomID uuid.UUID) error {
-	return r.db.WithContext(ctx).Where("user_id = ? AND room_id = ?", userID, roomID).Delete(&domain.UserRoom{}).Error
-}
-
-func (r *roomRepository) UpdateUserRole(ctx context.Context, userID, roomID uuid.UUID, role string) error {
-	return r.db.WithContext(ctx).Model(&domain.UserRoom{}).Where("user_id = ? AND room_id = ?", userID, roomID).Update("role", role).Error
-}
-
-func (r *roomRepository) GetUserRole(ctx context.Context, userID, roomID uuid.UUID) (string, error) {
-	var userRoom domain.UserRoom
-	err := r.db.WithContext(ctx).Where("user_id = ? AND room_id = ?", userID, roomID).First(&userRoom).Error
-	if err != nil {
-		return "", err
-	}
-	return userRoom.Role, nil
+func (r *roomRepository) SetActive(ctx context.Context, id uuid.UUID, active bool) error {
+	return r.db.WithContext(ctx).Model(&domain.Room{}).Where("id = ?", id).Update("is_active", active).Error
 }

@@ -39,18 +39,17 @@ func main() {
 	// Initialize repositories
 	userRepo := postgres.NewUserRepository(db)
 	roomRepo := postgres.NewRoomRepository(db)
-	userRoomRepo := postgres.NewUserRoomRepository(db)
 
 	// Initialize services
 	authService := service.NewAuthService(userRepo, cfg)
-	roomService := service.NewRoomService(roomRepo, userRepo)
+	roomService := service.NewRoomService(roomRepo)
 
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(authService)
 	roomHandler := handlers.NewRoomHandler(roomService)
 
 	// Initialize middleware
-	authMiddleware := middleware.NewAuthMiddleware(authService, userRoomRepo, logger)
+	authMiddleware := middleware.NewAuthMiddleware(authService, logger)
 
 	// Initialize Fiber app
 	app := fiber.New(fiber.Config{
@@ -81,26 +80,21 @@ func main() {
 	// Setup routes
 	api := app.Group("/api")
 
-	// Auth routes
+	// Auth routes (only for interviewers)
 	auth := api.Group("/auth")
 	auth.Post("/register", authHandler.Register)
 	auth.Post("/login", authHandler.Login)
-	auth.Post("/refresh", authHandler.RefreshToken)
-	auth.Post("/revoke", authMiddleware.RequireAuth(), authHandler.RevokeToken)
 
-	// Protected routes
-	rooms := api.Group("/rooms", authMiddleware.RequireAuth())
-	rooms.Post("/", roomHandler.CreateRoom)
-	rooms.Get("/", roomHandler.GetUserRooms)
-	rooms.Post("/:roomId/join", roomHandler.JoinRoom)
-	rooms.Post("/:roomId/leave", roomHandler.LeaveRoom)
+	// Room routes that require authentication
+	rooms := api.Group("/rooms")
+	rooms.Use(authMiddleware.RequireAuth())              // Apply auth middleware to all routes in this group
+	rooms.Post("/", roomHandler.CreateRoom)              // Create interview room
+	rooms.Get("/", roomHandler.GetInterviewerRooms)      // List interviewer's rooms
+	rooms.Post("/:roomId/end", roomHandler.EndInterview) // End interview
 
-	// Admin routes
-	admin := rooms.Group("/:roomId/admin", authMiddleware.RequireRole("admin", "owner"))
-	admin.Put("/", roomHandler.UpdateRoom)
-	admin.Delete("/", roomHandler.DeleteRoom)
-	admin.Put("/users/:userId/role", roomHandler.UpdateUserRole)
-
+	// Public route for candidates (no auth required)
+	api.Get("/rooms/join", roomHandler.JoinRoom) // Join room with token
+	
 	// Graceful shutdown setup
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)

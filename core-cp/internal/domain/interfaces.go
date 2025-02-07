@@ -10,41 +10,26 @@ type UserRepository interface {
 	Create(ctx context.Context, user *User) error
 	FindByEmail(ctx context.Context, email string) (*User, error)
 	FindByID(ctx context.Context, id uuid.UUID) (*User, error)
-	Update(ctx context.Context, user *User) error
-	Delete(ctx context.Context, id uuid.UUID) error
 }
 
 type RoomRepository interface {
 	Create(ctx context.Context, room *Room) error
 	FindByID(ctx context.Context, id uuid.UUID) (*Room, error)
-	FindByUser(ctx context.Context, userID uuid.UUID) ([]Room, error)
-	Update(ctx context.Context, room *Room) error
-	Delete(ctx context.Context, id uuid.UUID) error
-	AddUserToRoom(ctx context.Context, userID, roomID uuid.UUID, role string) error
-	RemoveUserFromRoom(ctx context.Context, userID, roomID uuid.UUID) error
-	UpdateUserRole(ctx context.Context, userID, roomID uuid.UUID, role string) error
-	GetUserRole(ctx context.Context, userID, roomID uuid.UUID) (string, error)
+	FindByToken(ctx context.Context, token string) (*Room, error)
+	FindByInterviewer(ctx context.Context, interviewerID uuid.UUID) ([]Room, error)
+	SetActive(ctx context.Context, id uuid.UUID, active bool) error
 }
 
 type AuthService interface {
 	Register(ctx context.Context, user *User) error
-	Login(ctx context.Context, email, password string) (string, string, error) // Returns access token, refresh token, and error
+	Login(ctx context.Context, email, password string) (string, error)
 	ValidateToken(ctx context.Context, token string) (*User, error)
-	RefreshToken(ctx context.Context, refreshToken string) (string, string, error)
-	RevokeToken(ctx context.Context, token string) error
 }
 
 type RoomService interface {
-	CreateRoom(ctx context.Context, room *Room) error
+	CreateRoom(ctx context.Context, interviewer *User, candidateName string) (*Room, error)
 	GetRoom(ctx context.Context, id uuid.UUID) (*Room, error)
-	UpdateRoom(ctx context.Context, room *Room) error
-	DeleteRoom(ctx context.Context, id uuid.UUID) error
-	JoinRoom(ctx context.Context, userID, roomID uuid.UUID) error
-	LeaveRoom(ctx context.Context, userID, roomID uuid.UUID) error
-	UpdateUserRole(ctx context.Context, userID, roomID uuid.UUID, role string) error
-	GetUserRooms(ctx context.Context, userID uuid.UUID) ([]Room, error)
-}
-
-type UserRoomRepository interface {
-	GetUserRole(userID, roomID uuid.UUID) (string, error)
+	ValidateRoomToken(ctx context.Context, token string) (*Room, error)
+	GetInterviewerRooms(ctx context.Context, interviewerID uuid.UUID) ([]Room, error)
+	EndInterview(ctx context.Context, roomID uuid.UUID, interviewerID uuid.UUID) error
 }

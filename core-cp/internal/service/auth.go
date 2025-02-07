@@ -43,57 +43,18 @@ func (s *authService) Register(ctx context.Context, user *domain.User) error {
 	return s.userRepo.Create(ctx, user)
 }
 
-func (s *authService) Login(ctx context.Context, email, password string) (string, string, error) {
+func (s *authService) Login(ctx context.Context, email, password string) (string, error) {
 	user, err := s.userRepo.FindByEmail(ctx, email)
 	if err != nil || !utils.CheckPassword(password, user.Password) {
-		return "", "", errors.New("invalid email or password")
+		return "", errors.New("invalid email or password")
 	}
 
-	accessToken, err := s.generateToken(user, s.config.JWT.TokenExpiry)
+	token, err := s.generateToken(user, s.config.JWT.TokenExpiry)
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 
-	refreshToken, err := s.generateToken(user, s.config.JWT.RefreshTokenExpiry)
-	if err != nil {
-		return "", "", err
-	}
-
-	return accessToken, refreshToken, nil
-}
-
-func (s *authService) RefreshToken(ctx context.Context, refreshToken string) (string, string, error) {
-	claims, err := s.validateToken(refreshToken)
-	if err != nil {
-		return "", "", err
-	}
-
-	userID, err := uuid.Parse(claims["userId"].(string))
-	if err != nil {
-		return "", "", err
-	}
-
-	user, err := s.userRepo.FindByID(ctx, userID)
-	if err != nil {
-		return "", "", err
-	}
-
-	newAccessToken, err := s.generateToken(user, s.config.JWT.TokenExpiry)
-	if err != nil {
-		return "", "", err
-	}
-
-	newRefreshToken, err := s.generateToken(user, s.config.JWT.RefreshTokenExpiry)
-	if err != nil {
-		return "", "", err
-	}
-
-	return newAccessToken, newRefreshToken, nil
-}
-
-func (s *authService) RevokeToken(ctx context.Context, token string) error {
-	s.revokedTokens[token] = true
-	return nil
+	return token, nil
 }
 
 func (s *authService) ValidateToken(ctx context.Context, tokenString string) (*domain.User, error) {
