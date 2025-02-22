@@ -1,7 +1,7 @@
 import axios, {type AxiosInstance, type AxiosRequestConfig, type AxiosResponse} from "axios";
 
 const API_BASE_URL =
-	import.meta.env.VITE_API_URL || "http://localhost:8081/api";
+	import.meta.env.VITE_API_URL || "http://localhost:8000/api";
 
 export class ApiError extends Error {
 	constructor(

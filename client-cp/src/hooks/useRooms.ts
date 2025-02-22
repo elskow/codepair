@@ -1,6 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "../services/apiClient";
-import type { Room } from "../types/auth";
+import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
+import {apiClient} from "../services/apiClient";
+import type {Room} from "../types/auth";
 
 export function useRooms() {
 	const queryClient = useQueryClient();
