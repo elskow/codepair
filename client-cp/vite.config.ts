@@ -6,11 +6,17 @@ import { TanStackRouterVite } from '@tanstack/router-plugin/vite'
 export default defineConfig({
   plugins: [TanStackRouterVite(), react()],
   server: {
-    host: '0.0.0.0', // Listen on all network interfaces
-    port: 5173, // Ensure this port is open and not blocked by firewall
-    hmr: {
-      host: "localhost",
-      protocol: "ws",
+    host: true,
+    port: 5173,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/ws': {
+        target: 'ws://localhost:8000',
+        ws: true,
+      },
     },
-  }
-})
+  },
+});

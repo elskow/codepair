@@ -3,8 +3,9 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "packageManager": "pnpm@8.15.4",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
@@ -13,12 +14,15 @@
   "dependencies": {
     "@monaco-editor/react": "^4.6.0",
     "@shiguredo/rnnoise-wasm": "^2022.2.0",
+    "@tanstack/react-query": "^5.66.0",
     "@tanstack/react-router": "^1.63.5",
+    "axios": "^1.7.9",
     "lucide-react": "^0.451.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@biomejs/biome": "1.9.4",
     "@eslint/js": "^9.9.0",
     "@tanstack/router-devtools": "^1.63.5",
     "@tanstack/router-plugin": "^1.63.5",

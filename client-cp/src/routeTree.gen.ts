@@ -13,6 +13,8 @@ import { createFileRoute } from '@tanstack/react-router'
 // Import Routes
 
 import { Route as rootRoute } from './routes/__root'
+import { Route as LogoutImport } from './routes/logout'
+import { Route as LoginImport } from './routes/login'
 import { Route as RoomIdImport } from './routes/$roomId'
 
 // Create Virtual Routes
@@ -20,6 +22,16 @@ import { Route as RoomIdImport } from './routes/$roomId'
 const IndexLazyImport = createFileRoute('/')()
 
 // Create/Update Routes
+
+const LogoutRoute = LogoutImport.update({
+  path: '/logout',
+  getParentRoute: () => rootRoute,
+} as any)
+
+const LoginRoute = LoginImport.update({
+  path: '/login',
+  getParentRoute: () => rootRoute,
+} as any)
 
 const RoomIdRoute = RoomIdImport.update({
   path: '/$roomId',
@@ -49,6 +61,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RoomIdImport
       parentRoute: typeof rootRoute
     }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginImport
+      parentRoute: typeof rootRoute
+    }
+    '/logout': {
+      id: '/logout'
+      path: '/logout'
+      fullPath: '/logout'
+      preLoaderRoute: typeof LogoutImport
+      parentRoute: typeof rootRoute
+    }
   }
 }
 
@@ -57,36 +83,46 @@ declare module '@tanstack/react-router' {
 export interface FileRoutesByFullPath {
   '/': typeof IndexLazyRoute
   '/$roomId': typeof RoomIdRoute
+  '/login': typeof LoginRoute
+  '/logout': typeof LogoutRoute
 }
 
 export interface FileRoutesByTo {
   '/': typeof IndexLazyRoute
   '/$roomId': typeof RoomIdRoute
+  '/login': typeof LoginRoute
+  '/logout': typeof LogoutRoute
 }
 
 export interface FileRoutesById {
   __root__: typeof rootRoute
   '/': typeof IndexLazyRoute
   '/$roomId': typeof RoomIdRoute
+  '/login': typeof LoginRoute
+  '/logout': typeof LogoutRoute
 }
 
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/$roomId'
+  fullPaths: '/' | '/$roomId' | '/login' | '/logout'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/$roomId'
-  id: '__root__' | '/' | '/$roomId'
+  to: '/' | '/$roomId' | '/login' | '/logout'
+  id: '__root__' | '/' | '/$roomId' | '/login' | '/logout'
   fileRoutesById: FileRoutesById
 }
 
 export interface RootRouteChildren {
   IndexLazyRoute: typeof IndexLazyRoute
   RoomIdRoute: typeof RoomIdRoute
+  LoginRoute: typeof LoginRoute
+  LogoutRoute: typeof LogoutRoute
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexLazyRoute: IndexLazyRoute,
   RoomIdRoute: RoomIdRoute,
+  LoginRoute: LoginRoute,
+  LogoutRoute: LogoutRoute,
 }
 
 export const routeTree = rootRoute
@@ -102,7 +138,9 @@ export const routeTree = rootRoute
       "filePath": "__root.tsx",
       "children": [
         "/",
-        "/$roomId"
+        "/$roomId",
+        "/login",
+        "/logout"
       ]
     },
     "/": {
@@ -110,6 +148,12 @@ export const routeTree = rootRoute
     },
     "/$roomId": {
       "filePath": "$roomId.tsx"
+    },
+    "/login": {
+      "filePath": "login.tsx"
+    },
+    "/logout": {
+      "filePath": "logout.tsx"
     }
   }
 }
