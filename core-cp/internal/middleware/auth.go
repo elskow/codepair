@@ -5,10 +5,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/elskow/codepair/core-cp/internal/domain"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"golang.org/x/time/rate"
+
+	"github.com/elskow/codepair/core-cp/internal/domain"
 )
 
 func RequireAuth(authService domain.AuthService) gin.HandlerFunc {

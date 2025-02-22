@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/gofiber/websocket/v2"
 	"github.com/pion/webrtc/v4"
@@ -21,6 +22,21 @@ type WebRTCClient struct {
 
 func (s *Server) handleVideoChatWS(c *websocket.Conn) {
 	defer c.Close()
+	defer func() {
+		c.WriteMessage(websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.CloseNormalClosure, "Server closing connection"))
+		c.Close()
+	}()
+
+	c.SetPingHandler(func(appData string) error {
+		return c.WriteControl(websocket.PongMessage, []byte(appData), time.Now().Add(10*time.Second))
+	})
+
+	c.SetReadDeadline(time.Now().Add(60 * time.Second))
+	c.SetPongHandler(func(string) error {
+		c.SetReadDeadline(time.Now().Add(60 * time.Second))
+		return nil
+	})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

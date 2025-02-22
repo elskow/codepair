@@ -8,13 +8,14 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+
 	"github.com/elskow/codepair/core-cp/config"
 	"github.com/elskow/codepair/core-cp/internal/handlers"
 	"github.com/elskow/codepair/core-cp/internal/middleware"
 	"github.com/elskow/codepair/core-cp/internal/repository/postgres"
 	"github.com/elskow/codepair/core-cp/internal/service"
-	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
 func main() {
@@ -51,31 +52,27 @@ func main() {
 	r := gin.Default()
 
 	// Middlewares
-	r.Use(middleware.Logger(logger))
 	r.Use(middleware.CORS())
+	r.Use(gin.Recovery())
+	r.Use(middleware.Logger(logger))
 
-	// Routes
-	api := r.Group("/api")
+	auth := r.Group("/auth")
 	{
-		// Auth routes
-		auth := api.Group("/auth")
-		{
-			auth.POST("/register", authHandler.Register)
-			auth.POST("/login", authHandler.Login)
-		}
-
-		// Room routes
-		rooms := api.Group("/rooms")
-		rooms.Use(middleware.RequireAuth(authService))
-		{
-			rooms.POST("", roomHandler.CreateRoom)
-			rooms.GET("", roomHandler.GetInterviewerRooms)
-			rooms.POST("/:roomId/end", roomHandler.EndInterview)
-		}
-
-		// Public room routes
-		api.GET("/rooms/join", roomHandler.JoinRoom)
+		auth.POST("/register", authHandler.Register)
+		auth.POST("/login", authHandler.Login)
 	}
+
+	// Room routes
+	rooms := r.Group("/rooms")
+	rooms.Use(middleware.RequireAuth(authService))
+	{
+		rooms.POST("/", roomHandler.CreateRoom)
+		rooms.GET("/", roomHandler.GetInterviewerRooms)
+		rooms.POST("/:roomId/end", roomHandler.EndInterview)
+	}
+
+	// Public room routes
+	r.GET("/rooms/join", roomHandler.JoinRoom)
 
 	r.RedirectTrailingSlash = false
 	r.RedirectFixedPath = false
