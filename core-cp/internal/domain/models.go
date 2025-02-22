@@ -18,6 +18,7 @@ type User struct {
 type Room struct {
 	ID            uuid.UUID `gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
 	InterviewerID uuid.UUID `gorm:"type:uuid;not null"`
+	Interviewer   User      `gorm:"foreignKey:InterviewerID"`
 	CandidateName string    `gorm:"not null"`
 	Token         string    `gorm:"unique;not null"`
 	IsActive      bool      `gorm:"default:true"`

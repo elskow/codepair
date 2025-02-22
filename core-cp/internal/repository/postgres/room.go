@@ -12,6 +12,32 @@ type roomRepository struct {
 	db *gorm.DB
 }
 
+func (r *roomRepository) SearchRooms(ctx context.Context, interviewerID uuid.UUID, query string) ([]domain.Room, error) {
+	var rooms []domain.Room
+	result := r.db.WithContext(ctx).
+		Preload("Interviewer").
+		Where("interviewer_id = ? AND candidate_name ILIKE ?", interviewerID, "%"+query+"%").
+		Find(&rooms)
+	return rooms, result.Error
+}
+
+func (r *roomRepository) UpdateRoomSettings(ctx context.Context, id uuid.UUID, settings domain.RoomSettings) error {
+	updates := map[string]interface{}{}
+
+	if settings.IsActive != nil {
+		updates["is_active"] = *settings.IsActive
+	}
+	if settings.CandidateName != nil {
+		updates["candidate_name"] = *settings.CandidateName
+	}
+
+	return r.db.WithContext(ctx).
+		Model(&domain.Room{}).
+		Where("id = ?", id).
+		Updates(updates).
+		Error
+}
+
 func NewRoomRepository(db *gorm.DB) domain.RoomRepository {
 	return &roomRepository{db: db}
 }

@@ -3,9 +3,8 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/gin-gonic/gin"
-
 	"github.com/elskow/codepair/core-cp/internal/domain"
+	"github.com/gin-gonic/gin"
 )
 
 type AuthHandler struct {
@@ -63,4 +62,28 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"token": token})
+}
+
+func (h *AuthHandler) GetCurrentUser(c *gin.Context) {
+	token := c.GetHeader("Authorization")
+	if token == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "no token provided"})
+		return
+	}
+
+	if len(token) > 7 && token[:7] == "Bearer " {
+		token = token[7:]
+	}
+
+	user, err := h.authService.GetCurrentUser(c.Request.Context(), token)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"id":    user.ID,
+		"email": user.Email,
+		"name":  user.Name,
+	})
 }

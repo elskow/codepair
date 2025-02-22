@@ -14,6 +14,23 @@ type roomService struct {
 	roomRepo domain.RoomRepository
 }
 
+func (s *roomService) SearchRooms(ctx context.Context, interviewerID uuid.UUID, query string) ([]domain.Room, error) {
+	return s.roomRepo.SearchRooms(ctx, interviewerID, query)
+}
+
+func (s *roomService) UpdateRoomSettings(ctx context.Context, roomID uuid.UUID, interviewerID uuid.UUID, settings domain.RoomSettings) error {
+	room, err := s.roomRepo.FindByID(ctx, roomID)
+	if err != nil {
+		return err
+	}
+
+	if room.InterviewerID != interviewerID {
+		return errors.New("unauthorized: not the interviewer of this room")
+	}
+
+	return s.roomRepo.UpdateRoomSettings(ctx, roomID, settings)
+}
+
 func NewRoomService(roomRepo domain.RoomRepository) domain.RoomService {
 	return &roomService{
 		roomRepo: roomRepo,

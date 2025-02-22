@@ -3,10 +3,9 @@ package handlers
 import (
 	"net/http"
 
+	"github.com/elskow/codepair/core-cp/internal/domain"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-
-	"github.com/elskow/codepair/core-cp/internal/domain"
 )
 
 type RoomHandler struct {
@@ -15,6 +14,54 @@ type RoomHandler struct {
 
 func NewRoomHandler(roomService domain.RoomService) *RoomHandler {
 	return &RoomHandler{roomService: roomService}
+}
+
+func (h *RoomHandler) SearchRooms(c *gin.Context) {
+	query := c.Query("q")
+	interviewer := c.MustGet("user").(*domain.User)
+
+	rooms, err := h.roomService.SearchRooms(c.Request.Context(), interviewer.ID, query)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	roomResponses := make([]gin.H, len(rooms))
+	for i, room := range rooms {
+		roomResponses[i] = gin.H{
+			"id":            room.ID,
+			"candidateName": room.CandidateName,
+			"token":         room.Token,
+			"isActive":      room.IsActive,
+			"interviewer": gin.H{
+				"email": room.Interviewer.Email,
+			},
+		}
+	}
+
+	c.JSON(http.StatusOK, roomResponses)
+}
+
+func (h *RoomHandler) UpdateRoomSettings(c *gin.Context) {
+	roomID, err := uuid.Parse(c.Param("roomId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid room ID"})
+		return
+	}
+
+	var settings domain.RoomSettings
+	if err := c.ShouldBindJSON(&settings); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	interviewer := c.MustGet("user").(*domain.User)
+	if err := h.roomService.UpdateRoomSettings(c.Request.Context(), roomID, interviewer.ID, settings); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.Status(http.StatusOK)
 }
 
 // CreateRoom - Only for interviewers

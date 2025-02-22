@@ -18,6 +18,10 @@ type authService struct {
 	revokedTokens map[string]bool
 }
 
+func (s *authService) GetCurrentUser(ctx context.Context, token string) (*domain.User, error) {
+	return s.ValidateToken(ctx, token)
+}
+
 func NewAuthService(userRepo domain.UserRepository, config *config.Config) domain.AuthService {
 	return &authService{
 		userRepo:      userRepo,

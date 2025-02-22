@@ -18,12 +18,15 @@ type RoomRepository interface {
 	FindByToken(ctx context.Context, token string) (*Room, error)
 	FindByInterviewer(ctx context.Context, interviewerID uuid.UUID) ([]Room, error)
 	SetActive(ctx context.Context, id uuid.UUID, active bool) error
+	SearchRooms(ctx context.Context, interviewerID uuid.UUID, query string) ([]Room, error)
+	UpdateRoomSettings(ctx context.Context, id uuid.UUID, settings RoomSettings) error
 }
 
 type AuthService interface {
 	Register(ctx context.Context, user *User) error
 	Login(ctx context.Context, email, password string) (string, error)
 	ValidateToken(ctx context.Context, token string) (*User, error)
+	GetCurrentUser(ctx context.Context, token string) (*User, error)
 }
 
 type RoomService interface {
@@ -32,4 +35,6 @@ type RoomService interface {
 	ValidateRoomToken(ctx context.Context, token string) (*Room, error)
 	GetInterviewerRooms(ctx context.Context, interviewerID uuid.UUID) ([]Room, error)
 	EndInterview(ctx context.Context, roomID uuid.UUID, interviewerID uuid.UUID) error
+	SearchRooms(ctx context.Context, interviewerID uuid.UUID, query string) ([]Room, error)
+	UpdateRoomSettings(ctx context.Context, roomID uuid.UUID, interviewerID uuid.UUID, settings RoomSettings) error
 }

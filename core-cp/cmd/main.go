@@ -8,14 +8,13 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
-
 	"github.com/elskow/codepair/core-cp/config"
 	"github.com/elskow/codepair/core-cp/internal/handlers"
 	"github.com/elskow/codepair/core-cp/internal/middleware"
 	"github.com/elskow/codepair/core-cp/internal/repository/postgres"
 	"github.com/elskow/codepair/core-cp/internal/service"
+	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 func main() {
@@ -60,6 +59,7 @@ func main() {
 	{
 		auth.POST("/register", authHandler.Register)
 		auth.POST("/login", authHandler.Login)
+		auth.GET("/me", middleware.RequireAuth(authService), authHandler.GetCurrentUser)
 	}
 
 	// Room routes
@@ -68,7 +68,9 @@ func main() {
 	{
 		rooms.POST("/", roomHandler.CreateRoom)
 		rooms.GET("/", roomHandler.GetInterviewerRooms)
+		rooms.GET("/search", roomHandler.SearchRooms)
 		rooms.POST("/:roomId/end", roomHandler.EndInterview)
+		rooms.PATCH("/:roomId/settings", roomHandler.UpdateRoomSettings)
 	}
 
 	// Public room routes
