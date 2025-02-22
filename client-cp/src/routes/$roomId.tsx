@@ -1,20 +1,20 @@
-import { Editor } from "@monaco-editor/react";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Camera, CameraOff, Mic, MicOff } from "lucide-react";
+import {Editor} from "@monaco-editor/react";
+import {createFileRoute, useNavigate} from "@tanstack/react-router";
+import {Camera, CameraOff, Mic, MicOff} from "lucide-react";
 import type React from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {useCallback, useEffect, useRef, useState} from "react";
 import Clock from "../components/Clock";
+import {RoomLayout} from "../components/RoomLayout";
 import TabView from "../components/TabView";
 import VideoStream from "../components/VideoStream";
 import WriteSpace from "../components/WriteSpace";
-import { SUPPORTED_LANGUAGES } from "../config/languages";
+import {SUPPORTED_LANGUAGES} from "../config/languages";
+import {useAuth} from "../hooks/useAuth";
 import useEditorPeer from "../hooks/useEditorPeer";
+import {useRooms} from "../hooks/useRooms";
 import useWebRTC from "../hooks/useWebRTC";
-import { useAuth } from "../hooks/useAuth";
-import { useRooms } from "../hooks/useRooms";
-import { apiClient } from "../services/apiClient";
-import type { Room as RoomType } from "../types/auth";
-import { RoomLayout } from "../components/RoomLayout";
+import {apiClient} from "../services/apiClient";
+import type {Room, Room as RoomType} from "../types/auth";
 
 export const Route = createFileRoute("/$roomId")({
 	component: RoomComponent,
@@ -115,18 +115,7 @@ function RoomComponent() {
 		const roomToken = urlParams.get("token");
 
 		try {
-			// Case 1: Candidate with room token
-			if (roomToken) {
-				const roomData = await joinRoom(roomToken);
-				if (roomData && "id" in roomData) {
-					setRoom(roomData);
-					setIsCandidate(true);
-					return;
-				}
-				throw new Error("Invalid room token");
-			}
-
-			// Case 2: Authenticated interviewer
+			// Case 1: Authenticated interviewer
 			if (isAuthenticated) {
 				const rooms = await apiClient.get<RoomType[]>("/rooms");
 				const currentRoom = rooms.find((r) => r.id === roomId);
@@ -135,6 +124,31 @@ function RoomComponent() {
 					return;
 				}
 				throw new Error("Room not found");
+			}
+
+			// Case 2: Candidate with room token
+			if (roomToken) {
+				try {
+					const roomData = await joinRoom(roomToken);
+					console.log('Room data received:', roomData);
+
+					if (roomData && "roomId" in roomData) {
+						const roomObject: Room = {
+							id: String(roomData.roomId),
+							candidateName: roomData.candidateName,
+							isActive: true,
+							token: roomToken
+						};
+
+						setRoom(roomObject);
+						setIsCandidate(true);
+						return;
+					}
+					throw new Error("Invalid room data format");
+				} catch (err) {
+					console.error('Error joining room:', err);
+					throw new Error(err instanceof Error ? err.message : "Failed to join room");
+				}
 			}
 
 			// Case 3: Neither token nor authenticated

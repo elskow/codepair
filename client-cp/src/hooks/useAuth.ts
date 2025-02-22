@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
-import { apiClient } from "../services/apiClient";
+import { apiClient, ApiError } from "../services/apiClient";
 import type {
 	LoginRequest,
 	LoginResponse,
@@ -15,16 +15,21 @@ export function useAuth() {
 	const userQuery = useQuery({
 		queryKey: ["user"],
 		queryFn: async () => {
-			const token = localStorage.getItem("token");
-			if (!token) return null;
 			try {
 				return await apiClient.get<User>("/auth/me");
 			} catch (error) {
-				localStorage.removeItem("token");
-				return null;
+				if (
+					error instanceof ApiError &&
+					(error.status === 401 || error.status === 403)
+				) {
+					localStorage.removeItem("token");
+				}
+				throw error;
 			}
 		},
+		enabled: !!localStorage.getItem("token"),
 		staleTime: Number.POSITIVE_INFINITY,
+		retry: false,
 	});
 
 	// Login mutation
@@ -37,8 +42,8 @@ export function useAuth() {
 			localStorage.setItem("token", response.token);
 			return response;
 		},
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["user"] });
+		onSuccess: async () => {
+			await queryClient.invalidateQueries({ queryKey: ["user"] });
 		},
 	});
 
@@ -58,6 +63,8 @@ export function useAuth() {
 	return {
 		user: userQuery.data,
 		isLoading: userQuery.isLoading,
+		isError: userQuery.isError,
+		error: userQuery.error,
 		isAuthenticated: !!userQuery.data,
 		login: loginMutation,
 		register: registerMutation,

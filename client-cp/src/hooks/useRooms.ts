@@ -1,13 +1,21 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../services/apiClient";
 import type { Room, RoomSettings } from "../types/auth";
+import { useAuth } from "./useAuth"; // Add this import
 
 export function useRooms() {
 	const queryClient = useQueryClient();
+	const { isAuthenticated } = useAuth();
 
 	const roomsQuery = useQuery({
 		queryKey: ["rooms"],
 		queryFn: () => apiClient.get<Room[]>("/rooms"),
+		initialData: [] as Room[],
+		enabled: isAuthenticated,
+		retry: 3,
+		refetchOnMount: true,
+		refetchOnWindowFocus: true,
+		staleTime: 30000,
 	});
 
 	const createRoomMutation = useMutation({
@@ -51,5 +59,6 @@ export function useRooms() {
 		updateRoomSettings: updateRoomSettingsMutation.mutate,
 		joinRoom: joinRoomMutation.mutateAsync,
 		endRoom: endRoomMutation.mutate,
+		refetchRooms: () => queryClient.invalidateQueries({ queryKey: ["rooms"] }),
 	};
 }
