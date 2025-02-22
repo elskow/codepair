@@ -1,9 +1,4 @@
-import type React from "react";
-import {useEffect, useState} from "react";
-import {createLazyFileRoute, useNavigate} from "@tanstack/react-router";
-import {useRooms} from "../hooks/useRooms";
-import {useAuth} from "../hooks/useAuth";
-import type {Room} from "../types/auth.ts";
+import { createLazyFileRoute, useNavigate } from "@tanstack/react-router";
 import {
 	ArrowRight,
 	Circle,
@@ -14,9 +9,14 @@ import {
 	Settings,
 	UserCircle,
 	UserPlus,
-	X
-} from 'lucide-react';
-
+	X,
+} from "lucide-react";
+import type React from "react";
+import { useEffect, useState } from "react";
+import { RoomSettingsModal } from "../components/RoomSettingsModal.tsx";
+import { useAuth } from "../hooks/useAuth";
+import { useRooms } from "../hooks/useRooms";
+import type { Room, RoomSettings } from "../types/auth";
 
 export const Route = createLazyFileRoute("/")({
 	component: Index,
@@ -25,11 +25,11 @@ export const Route = createLazyFileRoute("/")({
 function Index() {
 	const [candidateName, setCandidateName] = useState("");
 	const navigate = useNavigate();
-	const { isAuthenticated, user} = useAuth();
-	const { rooms, isLoading, createRoom } = useRooms();
+	const { isAuthenticated, user } = useAuth();
+	const { rooms, isLoading, createRoom, updateRoomSettings } = useRooms();
 	const [searchQuery, setSearchQuery] = useState("");
 	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
+	const [settingsRoom, setSettingsRoom] = useState<Room | null>(null);
 
 	useEffect(() => {
 		if (!isAuthenticated) {
@@ -56,8 +56,28 @@ function Index() {
 		}
 	};
 
-	const filteredRooms = rooms.filter(room =>
-		room.candidateName.toLowerCase().includes(searchQuery.toLowerCase())
+	const handleSettingsClick = (room: Room) => {
+		setSettingsRoom(room);
+	};
+
+	const handleUpdateSettings = async (settings: RoomSettings) => {
+		if (!settingsRoom) return;
+
+		try {
+			updateRoomSettings({
+				roomId: settingsRoom.id,
+				settings,
+			});
+			setSettingsRoom(null);
+			// TODO: Add success toast notification
+		} catch (error) {
+			console.error("Failed to update room settings:", error);
+			// TODO: Add error toast notification
+		}
+	};
+
+	const filteredRooms = rooms.filter((room) =>
+		room.candidateName.toLowerCase().includes(searchQuery.toLowerCase()),
 	);
 
 	if (isLoading) {
@@ -99,7 +119,7 @@ function Index() {
 					</div>
 					<button
 						type="button"
-						onClick={() => navigate({ to: '/logout' })}
+						onClick={() => navigate({ to: "/logout" })}
 						className="hidden sm:flex items-center justify-center w-8 h-8 text-[#8d8d8d] hover:text-[#f4f4f4] hover:bg-[#353535] transition-colors"
 					>
 						<LogOut size={18} />
@@ -135,7 +155,7 @@ function Index() {
 						<div className="pt-2 border-t border-[#393939]">
 							<button
 								type="button"
-								onClick={() => navigate({ to: '/logout' })}
+								onClick={() => navigate({ to: "/logout" })}
 								className="text-sm text-[#fa4d56] hover:bg-[#353535] px-3 py-2 w-full text-left flex items-center gap-2"
 							>
 								<LogOut size={16} />
@@ -149,8 +169,12 @@ function Index() {
 			<div className="max-w-[1200px] mx-auto p-4 sm:p-8">
 				{/* Page Header */}
 				<div className="mb-6 sm:mb-8">
-					<h2 className="text-[#f4f4f4] text-xl sm:text-[2rem] font-light mb-1">Interview Rooms</h2>
-					<p className="text-[#8d8d8d] text-sm sm:text-base">Manage your interview sessions</p>
+					<h2 className="text-[#f4f4f4] text-xl sm:text-[2rem] font-light mb-1">
+						Interview Rooms
+					</h2>
+					<p className="text-[#8d8d8d] text-sm sm:text-base">
+						Manage your interview sessions
+					</p>
 				</div>
 
 				{/* Action Bar */}
@@ -208,11 +232,13 @@ function Index() {
 									<Circle
 										size={8}
 										fill={room.isActive ? "#42be65" : "#525252"}
-										className={room.isActive ? "text-[#42be65]" : "text-[#525252]"}
+										className={
+											room.isActive ? "text-[#42be65]" : "text-[#525252]"
+										}
 									/>
 									<span className="text-[#f4f4f4] text-sm font-medium">
-                        {room.candidateName}
-                    </span>
+										{room.candidateName}
+									</span>
 								</div>
 								<div className="flex items-center gap-2 text-[#8d8d8d]">
 									<LinkIcon size={14} />
@@ -233,10 +259,12 @@ function Index() {
 								{room.isActive && (
 									<button
 										type="button"
-										onClick={() => navigate({
-											to: `/${room.id}`,
-											search: { token: room.token },
-										})}
+										onClick={() =>
+											navigate({
+												to: `/${room.id}`,
+												search: { token: room.token },
+											})
+										}
 										className="flex-1 lg:flex-none h-8 px-3 bg-[#0f62fe] text-white text-sm hover:bg-[#0353e9] focus:outline-2 focus:outline-offset-2 focus:outline-[#ffffff] active:bg-[#002d9c] flex items-center justify-center gap-2 transition-colors"
 									>
 										<ArrowRight size={14} />
@@ -246,6 +274,7 @@ function Index() {
 
 								<button
 									type="button"
+									onClick={() => handleSettingsClick(room)}
 									className="h-8 w-8 flex items-center justify-center text-[#8d8d8d] hover:text-[#f4f4f4] hover:bg-[#353535] focus:outline-2 focus:outline-offset-2 focus:outline-[#0f62fe] transition-colors shrink-0"
 								>
 									<Settings size={14} />
@@ -261,6 +290,13 @@ function Index() {
 					)}
 				</div>
 			</div>
+			{settingsRoom && (
+				<RoomSettingsModal
+					room={settingsRoom}
+					onClose={() => setSettingsRoom(null)}
+					onUpdate={handleUpdateSettings}
+				/>
+			)}
 		</div>
 	);
 }

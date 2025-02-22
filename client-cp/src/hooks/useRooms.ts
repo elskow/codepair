@@ -1,6 +1,6 @@
-import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
-import {apiClient} from "../services/apiClient";
-import type {Room} from "../types/auth";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiClient } from "../services/apiClient";
+import type { Room, RoomSettings } from "../types/auth";
 
 export function useRooms() {
 	const queryClient = useQueryClient();
@@ -13,6 +13,19 @@ export function useRooms() {
 	const createRoomMutation = useMutation({
 		mutationFn: (candidateName: string) =>
 			apiClient.post<Room>("/rooms", { candidateName }),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["rooms"] });
+		},
+	});
+
+	const updateRoomSettingsMutation = useMutation({
+		mutationFn: ({
+			roomId,
+			settings,
+		}: {
+			roomId: string;
+			settings: RoomSettings;
+		}) => apiClient.patch(`/rooms/${roomId}/settings`, settings),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["rooms"] });
 		},
@@ -35,7 +48,8 @@ export function useRooms() {
 		isLoading: roomsQuery.isLoading,
 		error: roomsQuery.error,
 		createRoom: createRoomMutation.mutate,
-		endRoom: endRoomMutation.mutate,
+		updateRoomSettings: updateRoomSettingsMutation.mutate,
 		joinRoom: joinRoomMutation.mutateAsync,
+		endRoom: endRoomMutation.mutate,
 	};
 }

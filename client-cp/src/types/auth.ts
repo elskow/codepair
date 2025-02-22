@@ -23,6 +23,15 @@ export interface Room {
 	candidateName: string;
 	token: string;
 	isActive: boolean;
+	interviewer?: {
+		email: string;
+		name: string;
+	};
+}
+
+export interface RoomSettings {
+	isActive?: boolean;
+	candidateName?: string;
 }
 
 export type JoinRoomFn = (token: string) => Promise<Room>;

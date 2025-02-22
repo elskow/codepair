@@ -1,7 +1,7 @@
 import type React from "react";
-import {useState} from "react";
-import {createFileRoute, useNavigate} from "@tanstack/react-router";
-import {useAuth} from "../hooks/useAuth";
+import { useState } from "react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useAuth } from "../hooks/useAuth";
 
 export const Route = createFileRoute("/login")({
 	component: LoginPage,
@@ -11,16 +11,16 @@ function LoginPage() {
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
 	const navigate = useNavigate();
-	const {login} = useAuth();
+	const { login } = useAuth();
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		login.mutate(
-			{email, password},
+			{ email, password },
 			{
 				onSuccess: (data) => {
 					localStorage.setItem("token", data.token);
-					navigate({to: "/"});
+					navigate({ to: "/" });
 				},
 			},
 		);
@@ -155,7 +155,7 @@ function LoginPage() {
 				</form>
 
 				<p className="mt-8 text-center text-[#c6c6c6] text-sm">
-					Need an account?{' '}
+					Need an account?{" "}
 					<a
 						href="mailto:admin@codepair.dev"
 						className="text-[#78a9ff] hover:text-[#0f62fe] focus:outline-[#ffffff] focus:outline-2"

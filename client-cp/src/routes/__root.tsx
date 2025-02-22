@@ -1,16 +1,16 @@
-import {createRootRoute, Outlet, redirect} from "@tanstack/react-router";
-import React, {Suspense} from "react";
+import { createRootRoute, Outlet, redirect } from "@tanstack/react-router";
+import React, { Suspense } from "react";
 import "../app.css";
-import {QueryClient, QueryClientProvider} from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const TanStackRouterDevtools =
 	process.env.NODE_ENV === "production"
 		? () => null
 		: React.lazy(() =>
-			import("@tanstack/router-devtools").then((res) => ({
-				default: res.TanStackRouterDevtools,
-			})),
-		);
+				import("@tanstack/router-devtools").then((res) => ({
+					default: res.TanStackRouterDevtools,
+				})),
+			);
 
 const queryClient = new QueryClient({
 	defaultOptions: {
@@ -32,10 +32,10 @@ export const Route = createRootRoute({
 	),
 	beforeLoad: ({ location }) => {
 		// Redirect /logout to login page and clear token
-		if (location.pathname === '/logout') {
-			localStorage.removeItem('token');
+		if (location.pathname === "/logout") {
+			localStorage.removeItem("token");
 			throw redirect({
-				to: '/login'
+				to: "/login",
 			});
 		}
 	},

@@ -1,4 +1,8 @@
-import axios, {type AxiosInstance, type AxiosRequestConfig, type AxiosResponse} from "axios";
+import axios, {
+	type AxiosInstance,
+	type AxiosRequestConfig,
+	type AxiosResponse,
+} from "axios";
 
 const API_BASE_URL =
 	import.meta.env.VITE_API_URL || "http://localhost:8000/api";

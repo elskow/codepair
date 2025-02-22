@@ -1,19 +1,19 @@
-import {Editor} from "@monaco-editor/react";
-import {createFileRoute, useNavigate} from "@tanstack/react-router";
-import {Camera, CameraOff, Mic, MicOff} from "lucide-react";
+import { Editor } from "@monaco-editor/react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Camera, CameraOff, Mic, MicOff } from "lucide-react";
 import type React from "react";
-import {useCallback, useEffect, useRef, useState} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Clock from "../components/Clock";
 import TabView from "../components/TabView";
 import VideoStream from "../components/VideoStream";
 import WriteSpace from "../components/WriteSpace";
-import {SUPPORTED_LANGUAGES} from "../config/languages";
+import { SUPPORTED_LANGUAGES } from "../config/languages";
 import useEditorPeer from "../hooks/useEditorPeer";
 import useWebRTC from "../hooks/useWebRTC";
-import {useAuth} from "../hooks/useAuth";
-import {useRooms} from "../hooks/useRooms";
-import {apiClient} from "../services/apiClient";
-import type {Room as RoomType} from "../types/auth";
+import { useAuth } from "../hooks/useAuth";
+import { useRooms } from "../hooks/useRooms";
+import { apiClient } from "../services/apiClient";
+import type { Room as RoomType } from "../types/auth";
 
 export const Route = createFileRoute("/$roomId")({
 	component: RoomComponent,
@@ -114,14 +114,14 @@ function RoomComponent() {
 
 		// Case 3: Neither token nor authenticated - redirect to log in
 		if (!roomToken && !isAuthenticated) {
-			await navigate({to: "/login"});
+			await navigate({ to: "/login" });
 			return;
 		}
 
 		// Case 4: Invalid room or token
 		console.error("Invalid room or token");
 		if (!roomToken) {
-			await navigate({to: "/login"});
+			await navigate({ to: "/login" });
 		}
 	}, [roomId, isAuthenticated, navigate, joinRoom]);
 
