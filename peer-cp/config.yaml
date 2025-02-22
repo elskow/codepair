@@ -1,5 +1,7 @@
 server:
-  address: ":8080"
-  stunServerURL: "stun:stun.l.google.com:19302"
-  cleanupInterval: "5m"
-  shutdownTimeout: "5s"
+  address: ":8081"
+  stun_server_url: "stun:stun.l.google.com:19302"
+  cleanup_interval: "1m"
+  validate_interval: "5m"
+core:
+  base_url: "http://localhost:8080"

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/gofiber/websocket/v2"
 	"github.com/pion/webrtc/v4"
@@ -22,32 +21,26 @@ type WebRTCClient struct {
 
 func (s *Server) handleVideoChatWS(c *websocket.Conn) {
 	defer c.Close()
-	defer func() {
-		c.WriteMessage(websocket.CloseMessage,
-			websocket.FormatCloseMessage(websocket.CloseNormalClosure, "Server closing connection"))
-		c.Close()
-	}()
 
-	c.SetPingHandler(func(appData string) error {
-		return c.WriteControl(websocket.PongMessage, []byte(appData), time.Now().Add(10*time.Second))
-	})
-
-	c.SetReadDeadline(time.Now().Add(60 * time.Second))
-	c.SetPongHandler(func(string) error {
-		c.SetReadDeadline(time.Now().Add(60 * time.Second))
-		return nil
-	})
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
+	ctx := context.WithValue(context.Background(), "requestID", c.Params("requestId"))
 	logger := s.getLogger(ctx)
+
 	roomID := c.Params("roomId")
-	if roomID == "" {
-		logger.Error("Room ID is required")
+	token := c.Query("token")
+
+	// Validate room with core service
+	validRoom, err := s.validateRoom(roomID, token)
+	if err != nil {
+		logger.Error("Room validation failed", zap.Error(err))
 		return
 	}
 
+	if !validRoom.IsActive {
+		logger.Error("Room is not active")
+		return
+	}
+
+	// Create WebRTC client
 	client := &WebRTCClient{
 		conn:       c,
 		candidates: make([]webrtc.ICECandidateInit, 0),
@@ -60,19 +53,19 @@ func (s *Server) handleVideoChatWS(c *websocket.Conn) {
 	}
 	client.pc = pc
 
-	// Store client in room
 	s.roomsMutex.Lock()
-	if _, exists := s.rooms[roomID]; !exists {
-		s.rooms[roomID] = &Room{
+	localRoom, exists := s.rooms[roomID]
+	if !exists {
+		localRoom = &Room{
 			editorClients: make(map[*websocket.Conn]*EditorClient),
 			webrtcClients: make(map[*websocket.Conn]*WebRTCClient),
 			peerConns:     make(map[string]*webrtc.PeerConnection),
 		}
+		s.rooms[roomID] = localRoom
 	}
-	room := s.rooms[roomID]
 	clientID := c.Query("clientId")
-	room.peerConns[clientID] = pc
-	room.webrtcClients[c] = client
+	localRoom.peerConns[clientID] = pc
+	localRoom.webrtcClients[c] = client
 	s.roomsMutex.Unlock()
 
 	// Setup ICE handling
@@ -138,10 +131,10 @@ func (s *Server) handleVideoChatWS(c *websocket.Conn) {
 
 	// Cleanup
 	s.roomsMutex.Lock()
-	if room, exists := s.rooms[roomID]; exists {
-		delete(room.webrtcClients, c)
-		delete(room.peerConns, clientID)
-		if len(room.editorClients) == 0 && len(room.webrtcClients) == 0 {
+	if localRoom, exists := s.rooms[roomID]; exists {
+		delete(localRoom.webrtcClients, c)
+		delete(localRoom.peerConns, clientID)
+		if len(localRoom.editorClients) == 0 && len(localRoom.webrtcClients) == 0 {
 			delete(s.rooms, roomID)
 		}
 	}

@@ -2,9 +2,11 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
+	"github.com/elskow/codepair/peer-cp/client"
 	"github.com/elskow/codepair/peer-cp/config"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/websocket/v2"
@@ -33,14 +35,16 @@ type Server struct {
 	roomsMutex sync.RWMutex
 	logger     *zap.Logger
 	config     config.Config
+	coreClient *client.CoreClient
 }
 
 func NewServer(app *fiber.App, logger *zap.Logger, config config.Config) *Server {
 	server := &Server{
-		app:    app,
-		rooms:  make(map[string]*Room),
-		logger: logger,
-		config: config,
+		app:        app,
+		rooms:      make(map[string]*Room),
+		logger:     logger,
+		config:     config,
+		coreClient: client.NewCoreClient(config.Core.BaseURL),
 	}
 
 	go server.cleanupInactiveClients()
@@ -52,6 +56,19 @@ func (s *Server) SetupRoutes() {
 	s.app.Get("/videochat/:roomId", websocket.New(s.handleVideoChatWS))
 }
 
+func (s *Server) validateRoom(roomID, token string) (*client.Room, error) {
+	if token == "" {
+		return nil, fmt.Errorf("token is required")
+	}
+
+	room, err := s.coreClient.ValidateRoom(roomID, token)
+	if err != nil {
+		return nil, fmt.Errorf("room validation failed: %w", err)
+	}
+
+	return room, nil
+}
+
 func (s *Server) cleanupInactiveClients() {
 	ticker := time.NewTicker(s.config.Server.CleanupInterval)
 	defer ticker.Stop()
@@ -59,6 +76,30 @@ func (s *Server) cleanupInactiveClients() {
 	for range ticker.C {
 		s.roomsMutex.Lock()
 		for roomID, room := range s.rooms {
+			// Validate room is still active
+			validRoom, err := s.validateRoom(roomID, "") // We might want to store tokens per room
+			if err != nil || !validRoom.IsActive {
+				s.logger.Info("Room is no longer active, cleaning up",
+					zap.String("roomID", roomID),
+					zap.Error(err))
+
+				room.clientsMutex.Lock()
+				// Close all connections
+				for conn := range room.editorClients {
+					conn.Close()
+				}
+				for conn := range room.webrtcClients {
+					conn.Close()
+				}
+				for _, pc := range room.peerConns {
+					pc.Close()
+				}
+				room.clientsMutex.Unlock()
+
+				delete(s.rooms, roomID)
+				continue
+			}
+			
 			room.clientsMutex.Lock()
 
 			// Check editor clients

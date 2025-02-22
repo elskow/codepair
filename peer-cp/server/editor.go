@@ -29,39 +29,47 @@ func (s *Server) handleEditorWS(c *websocket.Conn) {
 	logger := s.getLogger(ctx)
 
 	roomID := c.Params("roomId")
-	if roomID == "" {
-		logger.Warn("Empty room ID")
+	token := c.Query("token")
+
+	validRoom, err := s.validateRoom(roomID, token)
+	if err != nil {
+		logger.Error("Room validation failed", zap.Error(err))
 		return
 	}
 
-	// Create editor client
+	if !validRoom.IsActive {
+		logger.Error("Room is not active")
+		return
+	}
+
 	client := &EditorClient{
 		conn: c,
 	}
 
 	s.roomsMutex.Lock()
-	if _, exists := s.rooms[roomID]; !exists {
-		s.rooms[roomID] = &Room{
+	localRoom, exists := s.rooms[roomID]
+	if !exists {
+		localRoom = &Room{
 			editorClients: make(map[*websocket.Conn]*EditorClient),
 			webrtcClients: make(map[*websocket.Conn]*WebRTCClient),
 			peerConns:     make(map[string]*webrtc.PeerConnection),
 		}
+		s.rooms[roomID] = localRoom
 	}
-	room := s.rooms[roomID]
 	s.roomsMutex.Unlock()
 
-	room.clientsMutex.Lock()
-	room.editorClients[c] = client
-	room.clientsMutex.Unlock()
+	localRoom.clientsMutex.Lock()
+	localRoom.editorClients[c] = client
+	localRoom.clientsMutex.Unlock()
 
 	logger.Info("Editor client connected", zap.String("roomID", roomID))
 
 	// Send current code state to new client
-	if room.currentCode != "" {
+	if localRoom.currentCode != "" {
 		syncMessage := EditorMessage{
 			Type:     "sync",
-			Code:     room.currentCode,
-			Language: room.language,
+			Code:     localRoom.currentCode,
+			Language: localRoom.language,
 		}
 		if err := c.WriteJSON(syncMessage); err != nil {
 			logger.Error("Failed to send sync message", zap.Error(err))
@@ -83,12 +91,12 @@ func (s *Server) handleEditorWS(c *websocket.Conn) {
 	}
 
 	// Cleanup when client disconnects
-	room.clientsMutex.Lock()
-	delete(room.editorClients, c)
-	room.clientsMutex.Unlock()
+	localRoom.clientsMutex.Lock()
+	delete(localRoom.editorClients, c)
+	localRoom.clientsMutex.Unlock()
 
 	s.roomsMutex.Lock()
-	if len(room.editorClients) == 0 && len(room.webrtcClients) == 0 {
+	if len(localRoom.editorClients) == 0 && len(localRoom.webrtcClients) == 0 {
 		delete(s.rooms, roomID)
 		logger.Info("Room closed", zap.String("roomID", roomID))
 	}
@@ -137,7 +145,7 @@ func (s *Server) handleEditorMessage(ctx context.Context, c *websocket.Conn, roo
 	}
 
 	room.clientsMutex.RLock()
-	for client, _ := range room.editorClients {
+	for client := range room.editorClients {
 		if client != c {
 			err := client.WriteMessage(websocket.TextMessage, messageJSON)
 			if err != nil {

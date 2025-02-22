@@ -39,27 +39,25 @@ func main() {
 		AllowMethods: "GET, POST, PUT, DELETE, OPTIONS",
 	}))
 
-	// WebSocket upgrade middleware for /videochat
-	app.Use("/videochat/*", func(c *fiber.Ctx) error {
+	app.Use("/editor/*", func(c *fiber.Ctx) error {
 		if websocket.IsWebSocketUpgrade(c) {
+			token := c.Query("token")
+			if token == "" {
+				return fiber.ErrUnauthorized
+			}
 			c.Locals("allowed", true)
-			c.Set("Access-Control-Allow-Origin", "*")
-			c.Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-			c.Set("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization")
-			c.Set("Connection", "Upgrade")
-			c.Set("Upgrade", "websocket")
 			return c.Next()
 		}
 		return fiber.ErrUpgradeRequired
 	})
 
-	// WebSocket upgrade middleware for /editor
-	app.Use("/editor/*", func(c *fiber.Ctx) error {
+	app.Use("/videochat/*", func(c *fiber.Ctx) error {
 		if websocket.IsWebSocketUpgrade(c) {
+			token := c.Query("token")
+			if token == "" {
+				return fiber.ErrUnauthorized
+			}
 			c.Locals("allowed", true)
-			c.Set("Access-Control-Allow-Origin", "*")
-			c.Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-			c.Set("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization")
 			return c.Next()
 		}
 		return fiber.ErrUpgradeRequired

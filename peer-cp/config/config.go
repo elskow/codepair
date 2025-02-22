@@ -8,11 +8,13 @@ import (
 
 type Config struct {
 	Server struct {
-		Address         string        `mapstructure:"address"`
-		StunServerURL   string        `mapstructure:"stunServerURL"`
-		CleanupInterval time.Duration `mapstructure:"cleanupInterval"`
-		ShutdownTimeout time.Duration `mapstructure:"shutdownTimeout"`
-	} `mapstructure:"server"`
+		Address         string        `yaml:"address"`
+		StunServerURL   string        `yaml:"stun_server_url"`
+		CleanupInterval time.Duration `yaml:"cleanup_interval"`
+	} `yaml:"server"`
+	Core struct {
+		BaseURL string `yaml:"base_url"`
+	} `yaml:"core"`
 }
 
 func LoadConfig(configFile string) (Config, error) {
