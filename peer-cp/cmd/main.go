@@ -1,21 +1,15 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"log"
-	"os"
-	"os/signal"
-	"syscall"
 
 	"github.com/elskow/codepair/peer-cp/config"
 	"github.com/elskow/codepair/peer-cp/server"
 	"github.com/gofiber/contrib/fiberzap/v2"
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/compress"
-	"github.com/gofiber/fiber/v2/middleware/healthcheck"
-	"github.com/gofiber/fiber/v2/middleware/recover"
-	"github.com/gofiber/fiber/v2/middleware/requestid"
+	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/websocket/v2"
 	"go.uber.org/zap"
 )
 
@@ -38,41 +32,62 @@ func main() {
 		AppName: "CodePair Peer Service",
 	})
 
+	// Add CORS middleware
+	app.Use(cors.New(cors.Config{
+		AllowOrigins: "*", // For development. In production, set to your frontend URL
+		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
+		AllowMethods: "GET, POST, PUT, DELETE, OPTIONS",
+	}))
+
+	// WebSocket upgrade middleware for /videochat
+	app.Use("/videochat/*", func(c *fiber.Ctx) error {
+		if websocket.IsWebSocketUpgrade(c) {
+			c.Locals("allowed", true)
+			c.Set("Access-Control-Allow-Origin", "*")
+			c.Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			c.Set("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization")
+			return c.Next()
+		}
+		return fiber.ErrUpgradeRequired
+	})
+
+	// WebSocket upgrade middleware for /editor
+	app.Use("/editor/*", func(c *fiber.Ctx) error {
+		if websocket.IsWebSocketUpgrade(c) {
+			c.Locals("allowed", true)
+			c.Set("Access-Control-Allow-Origin", "*")
+			c.Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			c.Set("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization")
+			return c.Next()
+		}
+		return fiber.ErrUpgradeRequired
+	})
+
 	app.Use(fiberzap.New(fiberzap.Config{
 		Logger: logger,
-	}))
-	app.Use(recover.New())
-	app.Use(requestid.New())
-	app.Use(healthcheck.New())
-	app.Use(compress.New(compress.Config{
-		Level: compress.LevelBestSpeed,
 	}))
 
 	srv := server.NewServer(app, logger, config)
 	srv.SetupRoutes()
 
-	// Graceful shutdown setup
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	// Add OPTIONS handler for WebSocket endpoints
+	app.Options("/videochat/*", func(c *fiber.Ctx) error {
+		c.Set("Access-Control-Allow-Origin", "*")
+		c.Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		c.Set("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization")
+		return c.SendStatus(fiber.StatusOK)
+	})
 
-	go func() {
-		if err := app.Listen(config.Server.Address); err != nil {
-			logger.Fatal("Failed to start server", zap.Error(err))
-		}
-	}()
+	app.Options("/editor/*", func(c *fiber.Ctx) error {
+		c.Set("Access-Control-Allow-Origin", "*")
+		c.Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		c.Set("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization")
+		return c.SendStatus(fiber.StatusOK)
+	})
 
-	logger.Info("Server started", zap.String("address", config.Server.Address))
-
-	<-stop
-
-	logger.Info("Shutting down server...")
-
-	ctx, cancel := context.WithTimeout(context.Background(), config.Server.ShutdownTimeout)
-	defer cancel()
-
-	if err := srv.Shutdown(ctx); err != nil {
-		logger.Error("Server forced to shutdown", zap.Error(err))
+	// Start server
+	log.Printf("Server starting on %s", config.Server.Address)
+	if err := app.Listen(config.Server.Address); err != nil {
+		logger.Fatal("Failed to start server", zap.Error(err))
 	}
-
-	logger.Info("Server stopped gracefully")
 }

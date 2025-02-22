@@ -3,11 +3,21 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"sync"
 
 	"github.com/gofiber/websocket/v2"
 	"github.com/pion/webrtc/v4"
 	"go.uber.org/zap"
 )
+
+// WebRTCClient represents a client connected for video chat
+type WebRTCClient struct {
+	conn       *websocket.Conn
+	pc         *webrtc.PeerConnection
+	writeMutex sync.Mutex
+	candidates []webrtc.ICECandidateInit
+}
 
 func (s *Server) handleVideoChatWS(c *websocket.Conn) {
 	defer c.Close()
@@ -16,11 +26,15 @@ func (s *Server) handleVideoChatWS(c *websocket.Conn) {
 	defer cancel()
 
 	logger := s.getLogger(ctx)
-
 	roomID := c.Params("roomId")
 	if roomID == "" {
 		logger.Error("Room ID is required")
 		return
+	}
+
+	client := &WebRTCClient{
+		conn:       c,
+		candidates: make([]webrtc.ICECandidateInit, 0),
 	}
 
 	pc, err := s.createPeerConnection()
@@ -28,47 +42,41 @@ func (s *Server) handleVideoChatWS(c *websocket.Conn) {
 		logger.Error("Failed to create peer connection", zap.Error(err))
 		return
 	}
+	client.pc = pc
 
+	// Store client in room
 	s.roomsMutex.Lock()
 	if _, exists := s.rooms[roomID]; !exists {
 		s.rooms[roomID] = &Room{
-			clients:   make(map[*websocket.Conn]bool),
-			peerConns: make(map[string]*webrtc.PeerConnection),
+			editorClients: make(map[*websocket.Conn]*EditorClient),
+			webrtcClients: make(map[*websocket.Conn]*WebRTCClient),
+			peerConns:     make(map[string]*webrtc.PeerConnection),
 		}
 	}
 	room := s.rooms[roomID]
 	clientID := c.Query("clientId")
 	room.peerConns[clientID] = pc
+	room.webrtcClients[c] = client
 	s.roomsMutex.Unlock()
 
-	room.clientsMutex.Lock()
-	room.clients[c] = true
-	room.clientsMutex.Unlock()
-
-	logger.Info("Video chat client connected",
-		zap.String("roomID", roomID),
-		zap.String("clientID", clientID))
-
-	// Setup data channel
-	pc.OnDataChannel(func(d *webrtc.DataChannel) {
-		d.OnMessage(func(msg webrtc.DataChannelMessage) {
-			s.broadcastToRoom(roomID, c, msg.Data)
-		})
-	})
-
-	// Handle ICE candidates
+	// Setup ICE handling
 	pc.OnICECandidate(func(ice *webrtc.ICECandidate) {
 		if ice == nil {
 			return
 		}
 
-		candidateJSON, err := json.Marshal(ice.ToJSON())
-		if err != nil {
-			logger.Error("Failed to marshal ICE candidate", zap.Error(err))
-			return
+		candidateJSON := ice.ToJSON()
+		msg := map[string]interface{}{
+			"type":      "ice_candidate",
+			"candidate": candidateJSON,
 		}
 
-		s.broadcastToRoom(roomID, c, candidateJSON)
+		client.writeMutex.Lock()
+		defer client.writeMutex.Unlock()
+
+		if err := c.WriteJSON(msg); err != nil {
+			logger.Error("Failed to send ICE candidate", zap.Error(err))
+		}
 	})
 
 	for {
@@ -88,33 +96,40 @@ func (s *Server) handleVideoChatWS(c *websocket.Conn) {
 			continue
 		}
 
+		// Handle SDP first
 		if sdp, ok := signal["sdp"].(map[string]interface{}); ok {
-			s.handleSDP(ctx, c, pc, sdp)
+			if err := s.handleSDP(ctx, client, sdp); err != nil {
+				logger.Error("Failed to handle SDP", zap.Error(err))
+				continue
+			}
+
+			// Process stored candidates after SDP is set
+			for _, candidate := range client.candidates {
+				if err := client.pc.AddICECandidate(candidate); err != nil {
+					logger.Error("Failed to add stored ICE candidate", zap.Error(err))
+				}
+			}
+			client.candidates = nil // Clear stored candidates
 		} else if candidate, ok := signal["candidate"].(map[string]interface{}); ok {
-			s.handleICECandidate(ctx, pc, candidate)
+			if err := s.handleICECandidate(ctx, client, candidate); err != nil {
+				logger.Error("Failed to handle ICE candidate", zap.Error(err))
+			}
 		}
 
+		// Broadcast to other clients in room
 		s.broadcastToRoom(roomID, c, msg)
 	}
 
 	// Cleanup
-	room.clientsMutex.Lock()
-	delete(room.clients, c)
-	delete(room.peerConns, clientID)
-	room.clientsMutex.Unlock()
-
-	pc.Close()
-
 	s.roomsMutex.Lock()
-	if len(room.clients) == 0 {
-		delete(s.rooms, roomID)
-		logger.Info("Room closed", zap.String("roomID", roomID))
+	if room, exists := s.rooms[roomID]; exists {
+		delete(room.webrtcClients, c)
+		delete(room.peerConns, clientID)
+		if len(room.editorClients) == 0 && len(room.webrtcClients) == 0 {
+			delete(s.rooms, roomID)
+		}
 	}
 	s.roomsMutex.Unlock()
-
-	logger.Info("Video chat client disconnected",
-		zap.String("roomID", roomID),
-		zap.String("clientID", clientID))
 }
 
 func (s *Server) createPeerConnection() (*webrtc.PeerConnection, error) {
@@ -144,65 +159,68 @@ func (s *Server) createPeerConnection() (*webrtc.PeerConnection, error) {
 	return api.NewPeerConnection(config)
 }
 
-func (s *Server) handleSDP(ctx context.Context, c *websocket.Conn, pc *webrtc.PeerConnection, sdp map[string]interface{}) {
-	logger := s.getLogger(ctx)
-
+func (s *Server) handleSDP(ctx context.Context, client *WebRTCClient, sdp map[string]interface{}) error {
 	sdpJSON, err := json.Marshal(sdp)
 	if err != nil {
-		logger.Error("Failed to marshal SDP", zap.Error(err))
-		return
+		return fmt.Errorf("failed to marshal SDP: %w", err)
 	}
 
 	var sessionDesc webrtc.SessionDescription
 	if err := json.Unmarshal(sdpJSON, &sessionDesc); err != nil {
-		logger.Error("Failed to parse SDP", zap.Error(err))
-		return
+		return fmt.Errorf("failed to parse SDP: %w", err)
 	}
 
-	err = pc.SetRemoteDescription(sessionDesc)
-	if err != nil {
-		logger.Error("Failed to set remote description", zap.Error(err))
-		return
+	if err := client.pc.SetRemoteDescription(sessionDesc); err != nil {
+		return fmt.Errorf("failed to set remote description: %w", err)
 	}
 
 	if sessionDesc.Type == webrtc.SDPTypeOffer {
-		answer, err := pc.CreateAnswer(nil)
+		answer, err := client.pc.CreateAnswer(nil)
 		if err != nil {
-			logger.Error("Failed to create answer", zap.Error(err))
-			return
+			return fmt.Errorf("failed to create answer: %w", err)
 		}
 
-		err = pc.SetLocalDescription(answer)
-		if err != nil {
-			logger.Error("Failed to set local description", zap.Error(err))
-			return
+		if err := client.pc.SetLocalDescription(answer); err != nil {
+			return fmt.Errorf("failed to set local description: %w", err)
 		}
 
-		c.WriteJSON(map[string]interface{}{
-			"sdp": answer,
-		})
+		client.writeMutex.Lock()
+		defer client.writeMutex.Unlock()
+
+		if err := client.conn.WriteJSON(map[string]interface{}{
+			"type": "answer",
+			"sdp":  answer,
+		}); err != nil {
+			return fmt.Errorf("failed to send answer: %w", err)
+		}
 	}
+
+	return nil
 }
 
-func (s *Server) handleICECandidate(ctx context.Context, pc *webrtc.PeerConnection, candidate map[string]interface{}) {
-	logger := s.getLogger(ctx)
-
+func (s *Server) handleICECandidate(ctx context.Context, client *WebRTCClient, candidate map[string]interface{}) error {
 	candidateJSON, err := json.Marshal(candidate)
 	if err != nil {
-		logger.Error("Failed to marshal ICE candidate", zap.Error(err))
-		return
+		return fmt.Errorf("failed to marshal ICE candidate: %w", err)
 	}
 
 	var iceCandidate webrtc.ICECandidateInit
 	if err := json.Unmarshal(candidateJSON, &iceCandidate); err != nil {
-		logger.Error("Failed to parse ICE candidate", zap.Error(err))
-		return
+		return fmt.Errorf("failed to parse ICE candidate: %w", err)
 	}
 
-	err = pc.AddICECandidate(iceCandidate)
-	if err != nil {
-		logger.Error("Failed to add ICE candidate", zap.Error(err))
+	// If remote description isn't set yet, store the candidate
+	if client.pc.RemoteDescription() == nil {
+		client.candidates = append(client.candidates, iceCandidate)
+		return nil
 	}
+
+	// Add the candidate if remote description is set
+	if err := client.pc.AddICECandidate(iceCandidate); err != nil {
+		return fmt.Errorf("failed to add ICE candidate: %w", err)
+	}
+
+	return nil
 }
 
 func (s *Server) broadcastToRoom(roomID string, sender *websocket.Conn, message []byte) {
@@ -210,12 +228,12 @@ func (s *Server) broadcastToRoom(roomID string, sender *websocket.Conn, message 
 	defer s.roomsMutex.RUnlock()
 
 	if room, exists := s.rooms[roomID]; exists {
-		room.clientsMutex.RLock()
-		defer room.clientsMutex.RUnlock()
-
-		for client := range room.clients {
+		for client, wc := range room.webrtcClients {
 			if client != sender {
+				wc.writeMutex.Lock()
 				err := client.WriteMessage(websocket.TextMessage, message)
+				wc.writeMutex.Unlock()
+
 				if err != nil {
 					s.logger.Error("Failed to broadcast message to client",
 						zap.Error(err),

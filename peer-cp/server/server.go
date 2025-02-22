@@ -12,12 +12,19 @@ import (
 	"go.uber.org/zap"
 )
 
+// EditorClient represents a client connected to the editor
+type EditorClient struct {
+	conn *websocket.Conn
+}
+
+// Room represents a shared room for collaboration
 type Room struct {
-	clients      map[*websocket.Conn]bool
-	clientsMutex sync.RWMutex
-	currentCode  string
-	language     string
-	peerConns    map[string]*webrtc.PeerConnection
+	editorClients map[*websocket.Conn]*EditorClient
+	webrtcClients map[*websocket.Conn]*WebRTCClient
+	clientsMutex  sync.RWMutex
+	currentCode   string
+	language      string
+	peerConns     map[string]*webrtc.PeerConnection
 }
 
 type Server struct {
@@ -53,13 +60,26 @@ func (s *Server) cleanupInactiveClients() {
 		s.roomsMutex.Lock()
 		for roomID, room := range s.rooms {
 			room.clientsMutex.Lock()
-			for client := range room.clients {
-				if err := client.WriteMessage(websocket.PingMessage, nil); err != nil {
-					s.logger.Warn("Inactive client detected, closing connection",
+
+			// Check editor clients
+			for conn, client := range room.editorClients {
+				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+					s.logger.Warn("Inactive editor client detected",
 						zap.String("roomID", roomID),
 						zap.Error(err))
-					client.Close()
-					delete(room.clients, client)
+					client.conn.Close()
+					delete(room.editorClients, conn)
+				}
+			}
+
+			// Check WebRTC clients
+			for conn, client := range room.webrtcClients {
+				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+					s.logger.Warn("Inactive WebRTC client detected",
+						zap.String("roomID", roomID),
+						zap.Error(err))
+					client.conn.Close()
+					delete(room.webrtcClients, conn)
 				}
 			}
 
@@ -70,10 +90,12 @@ func (s *Server) cleanupInactiveClients() {
 				}
 			}
 
-			if len(room.clients) == 0 {
-				s.logger.Info("Removing empty room during cleanup", zap.String("roomID", roomID))
+			// Remove empty room
+			if len(room.editorClients) == 0 && len(room.webrtcClients) == 0 {
+				s.logger.Info("Removing empty room", zap.String("roomID", roomID))
 				delete(s.rooms, roomID)
 			}
+
 			room.clientsMutex.Unlock()
 		}
 		s.roomsMutex.Unlock()
@@ -86,9 +108,15 @@ func (s *Server) Shutdown(ctx context.Context) error {
 
 	for roomID, room := range s.rooms {
 		room.clientsMutex.Lock()
-		for client := range room.clients {
-			client.Close()
+		// Close editor clients
+		for conn := range room.editorClients {
+			conn.Close()
 		}
+		// Close WebRTC clients
+		for conn := range room.webrtcClients {
+			conn.Close()
+		}
+		// Close peer connections
 		for _, pc := range room.peerConns {
 			pc.Close()
 		}

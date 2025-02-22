@@ -34,18 +34,24 @@ func (s *Server) handleEditorWS(c *websocket.Conn) {
 		return
 	}
 
+	// Create editor client
+	client := &EditorClient{
+		conn: c,
+	}
+
 	s.roomsMutex.Lock()
 	if _, exists := s.rooms[roomID]; !exists {
 		s.rooms[roomID] = &Room{
-			clients:   make(map[*websocket.Conn]bool),
-			peerConns: make(map[string]*webrtc.PeerConnection),
+			editorClients: make(map[*websocket.Conn]*EditorClient),
+			webrtcClients: make(map[*websocket.Conn]*WebRTCClient),
+			peerConns:     make(map[string]*webrtc.PeerConnection),
 		}
 	}
 	room := s.rooms[roomID]
 	s.roomsMutex.Unlock()
 
 	room.clientsMutex.Lock()
-	room.clients[c] = true
+	room.editorClients[c] = client
 	room.clientsMutex.Unlock()
 
 	logger.Info("Editor client connected", zap.String("roomID", roomID))
@@ -78,11 +84,11 @@ func (s *Server) handleEditorWS(c *websocket.Conn) {
 
 	// Cleanup when client disconnects
 	room.clientsMutex.Lock()
-	delete(room.clients, c)
+	delete(room.editorClients, c)
 	room.clientsMutex.Unlock()
 
 	s.roomsMutex.Lock()
-	if len(room.clients) == 0 {
+	if len(room.editorClients) == 0 && len(room.webrtcClients) == 0 {
 		delete(s.rooms, roomID)
 		logger.Info("Room closed", zap.String("roomID", roomID))
 	}
@@ -131,7 +137,7 @@ func (s *Server) handleEditorMessage(ctx context.Context, c *websocket.Conn, roo
 	}
 
 	room.clientsMutex.RLock()
-	for client := range room.clients {
+	for client, _ := range room.editorClients {
 		if client != c {
 			err := client.WriteMessage(websocket.TextMessage, messageJSON)
 			if err != nil {
