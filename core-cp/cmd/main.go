@@ -7,15 +7,61 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/lesismal/nbio/nbhttp"
+	"go.uber.org/zap"
 
 	"github.com/elskow/codepair/core-cp/config"
+	"github.com/elskow/codepair/core-cp/internal/domain"
 	"github.com/elskow/codepair/core-cp/internal/handlers"
 	"github.com/elskow/codepair/core-cp/internal/middleware"
 	"github.com/elskow/codepair/core-cp/internal/repository/postgres"
 	"github.com/elskow/codepair/core-cp/internal/service"
-	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
+
+func setupRouter(
+	logger *zap.Logger,
+	authService domain.AuthService,
+	authHandler *handlers.AuthHandler,
+	roomHandler *handlers.RoomHandler,
+) *gin.Engine {
+	r := gin.New()
+
+	r.Use(middleware.CORS())
+	r.Use(middleware.Logger(logger))
+
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"status": "ok",
+			"time":   time.Now(),
+		})
+	})
+
+	auth := r.Group("/auth")
+	{
+		auth.POST("/register", authHandler.Register)
+		auth.POST("/login", authHandler.Login)
+		auth.GET("/me", middleware.RequireAuth(authService), authHandler.GetCurrentUser)
+	}
+
+	rooms := r.Group("/rooms")
+	{
+		rooms.GET("/join", roomHandler.JoinRoom)
+
+		protected := rooms.Use(middleware.RequireAuth(authService))
+		{
+			protected.GET("", roomHandler.GetInterviewerRooms)
+			protected.POST("", roomHandler.CreateRoom)
+			protected.GET("/search", roomHandler.SearchRooms)
+			protected.POST("/:roomId/end", roomHandler.EndInterview)
+			protected.PATCH("/:roomId/settings", roomHandler.UpdateRoomSettings)
+		}
+	}
+
+	return r
+}
 
 func main() {
 	// Initialize logger
@@ -47,52 +93,38 @@ func main() {
 	authHandler := handlers.NewAuthHandler(authService)
 	roomHandler := handlers.NewRoomHandler(roomService)
 
-	// Initialize Gin
-	r := gin.Default()
+	// Setup router
+	router := setupRouter(logger, authService, authHandler, roomHandler)
 
-	// Middlewares
-	r.Use(middleware.CORS())
-	r.Use(gin.Recovery())
-	r.Use(middleware.Logger(logger))
+	// NBIO engine configuration
+	engine := nbhttp.NewEngine(nbhttp.Config{
+		Network: "tcp",
+		Addrs:   []string{cfg.Server.Port},
+		Handler: router,
 
-	auth := r.Group("/auth")
-	{
-		auth.POST("/register", authHandler.Register)
-		auth.POST("/login", authHandler.Login)
-		auth.GET("/me", middleware.RequireAuth(authService), authHandler.GetCurrentUser)
+		ReadBufferSize:          1024 * 64,   // 64KB
+		MaxWriteBufferSize:      1024 * 1024, // 1MB
+		MaxLoad:                 1000000,     // Max concurrent connections
+		ReleaseWebsocketPayload: true,
+
+		// TODO: SSL/TLS config if needed
+		// ServerName:      "localhost",
+		// CertFile:        "server.crt",
+		// KeyFile:         "server.key",
+	})
+
+	// Start the server
+	err = engine.Start()
+	if err != nil {
+		logger.Fatal("failed to start server", zap.Error(err))
 	}
 
-	// Room routes
-	rooms := r.Group("/rooms")
-	rooms.Use(middleware.RequireAuth(authService))
-	{
-		rooms.POST("/", roomHandler.CreateRoom)
-		rooms.GET("/", roomHandler.GetInterviewerRooms)
-		rooms.GET("/search", roomHandler.SearchRooms)
-		rooms.POST("/:roomId/end", roomHandler.EndInterview)
-		rooms.PATCH("/:roomId/settings", roomHandler.UpdateRoomSettings)
-	}
-
-	// Public room routes
-	r.GET("/rooms/join", roomHandler.JoinRoom)
-
-	r.RedirectTrailingSlash = false
-	r.RedirectFixedPath = false
-
-	// Server setup
-	srv := &http.Server{
-		Addr:    cfg.Server.Port,
-		Handler: r,
-	}
+	logger.Info("server started",
+		zap.String("port", cfg.Server.Port),
+		zap.String("mode", "nbio"),
+	)
 
 	// Graceful shutdown
-	go func() {
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Fatal("failed to start server", zap.Error(err))
-		}
-	}()
-
-	// Wait for interrupt signal
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
@@ -102,7 +134,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.Server.ShutdownTimeout)
 	defer cancel()
 
-	if err := srv.Shutdown(ctx); err != nil {
+	if err := engine.Shutdown(ctx); err != nil {
 		logger.Fatal("server forced to shutdown", zap.Error(err))
 	}
 
