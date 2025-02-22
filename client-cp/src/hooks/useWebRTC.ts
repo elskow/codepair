@@ -18,7 +18,7 @@ interface WebRTCHook {
 	toggleMicrophone: () => void;
 }
 
-const useWebRTC = (url: string, roomId: string): WebRTCHook => {
+const useWebRTC = (url: string | null, roomId: string): WebRTCHook => {
 	// States
 	const [connectionState, setConnectionState] = useState<ConnectionState>({
 		status: "Disconnected",
@@ -330,6 +330,8 @@ const useWebRTC = (url: string, roomId: string): WebRTCHook => {
 
 	// Initialization and cleanup
 	useEffect(() => {
+		if (!url) return;
+
 		let isInitialized = false;
 
 		const initialize = async () => {
@@ -368,7 +370,7 @@ const useWebRTC = (url: string, roomId: string): WebRTCHook => {
 			setLocalStream(null);
 			setRemoteStream(null);
 		};
-	}, [connectWebSocket, initializeMediaStream, cleanupWebSocket]);
+	}, [connectWebSocket, initializeMediaStream, cleanupWebSocket, url]);
 
 	return {
 		connectionStatus: connectionState.status,

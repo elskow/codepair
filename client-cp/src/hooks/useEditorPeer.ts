@@ -9,13 +9,15 @@ interface EditorPeerHook {
 	handleLanguageChange: (event: React.ChangeEvent<HTMLSelectElement>) => void;
 }
 
-const useEditorPeer = (url: string, roomId: string): EditorPeerHook => {
+const useEditorPeer = (url: string | null, roomId: string): EditorPeerHook => {
 	const [ws, setWs] = useState<WebSocket | null>(null);
 	const [code, setCode] = useState("// Start coding...");
 	const [language, setLanguage] = useState("javascript");
 	const prevCodeRef = useRef(code);
 
 	useEffect(() => {
+		if (!url) return;
+
 		const socket = new WebSocket(`${url}/${roomId}`);
 		setWs(socket);
 
