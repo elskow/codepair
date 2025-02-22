@@ -1,9 +1,12 @@
 package handlers
 
 import (
-	"github.com/elskow/codepair/core-cp/internal/domain"
-	"github.com/gofiber/fiber/v2"
+	"net/http"
+
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+
+	"github.com/elskow/codepair/core-cp/internal/domain"
 )
 
 type RoomHandler struct {
@@ -15,33 +18,28 @@ func NewRoomHandler(roomService domain.RoomService) *RoomHandler {
 }
 
 // CreateRoom - Only for interviewers
-func (h *RoomHandler) CreateRoom(c *fiber.Ctx) error {
+func (h *RoomHandler) CreateRoom(c *gin.Context) {
 	var request struct {
-		CandidateName string `json:"candidateName" validate:"required"`
+		CandidateName string `json:"candidateName" binding:"required"`
 	}
 
-	if err := c.BodyParser(&request); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "invalid request body",
 		})
+		return
 	}
 
-	if request.CandidateName == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "candidateName is required",
-		})
-	}
-
-	interviewer := c.Locals("user").(*domain.User)
-	room, err := h.roomService.CreateRoom(c.Context(), interviewer, request.CandidateName)
+	interviewer := c.MustGet("user").(*domain.User)
+	room, err := h.roomService.CreateRoom(c.Request.Context(), interviewer, request.CandidateName)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
+		return
 	}
 
-	// Return complete room data
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+	c.JSON(http.StatusCreated, gin.H{
 		"id":            room.ID,
 		"candidateName": room.CandidateName,
 		"token":         room.Token,
@@ -50,41 +48,44 @@ func (h *RoomHandler) CreateRoom(c *fiber.Ctx) error {
 }
 
 // JoinRoom - For candidates using token
-func (h *RoomHandler) JoinRoom(c *fiber.Ctx) error {
+func (h *RoomHandler) JoinRoom(c *gin.Context) {
 	token := c.Query("token")
 	if token == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "token is required",
 		})
+		return
 	}
 
-	room, err := h.roomService.ValidateRoomToken(c.Context(), token)
+	room, err := h.roomService.ValidateRoomToken(c.Request.Context(), token)
 	if err != nil {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+		c.JSON(http.StatusUnauthorized, gin.H{
 			"error": "invalid token",
 		})
+		return
 	}
 
-	return c.JSON(fiber.Map{
+	c.JSON(http.StatusOK, gin.H{
 		"roomId":        room.ID,
 		"candidateName": room.CandidateName,
 	})
 }
 
 // GetInterviewerRooms - Only for interviewers
-func (h *RoomHandler) GetInterviewerRooms(c *fiber.Ctx) error {
-	interviewer := c.Locals("user").(*domain.User)
-	rooms, err := h.roomService.GetInterviewerRooms(c.Context(), interviewer.ID)
+func (h *RoomHandler) GetInterviewerRooms(c *gin.Context) {
+	interviewer := c.MustGet("user").(*domain.User)
+	rooms, err := h.roomService.GetInterviewerRooms(c.Request.Context(), interviewer.ID)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
+		return
 	}
 
 	// Convert rooms to response format
-	roomResponses := make([]fiber.Map, len(rooms))
+	roomResponses := make([]gin.H, len(rooms))
 	for i, room := range rooms {
-		roomResponses[i] = fiber.Map{
+		roomResponses[i] = gin.H{
 			"id":            room.ID,
 			"candidateName": room.CandidateName,
 			"token":         room.Token,
@@ -92,24 +93,26 @@ func (h *RoomHandler) GetInterviewerRooms(c *fiber.Ctx) error {
 		}
 	}
 
-	return c.JSON(roomResponses)
+	c.JSON(http.StatusOK, roomResponses)
 }
 
 // EndInterview - Only for interviewers
-func (h *RoomHandler) EndInterview(c *fiber.Ctx) error {
-	roomID, err := uuid.Parse(c.Params("roomId"))
+func (h *RoomHandler) EndInterview(c *gin.Context) {
+	roomID, err := uuid.Parse(c.Param("roomId"))
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "invalid room ID",
 		})
+		return
 	}
 
-	interviewer := c.Locals("user").(*domain.User)
-	if err := h.roomService.EndInterview(c.Context(), roomID, interviewer.ID); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+	interviewer := c.MustGet("user").(*domain.User)
+	if err := h.roomService.EndInterview(c.Request.Context(), roomID, interviewer.ID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
+		return
 	}
 
-	return c.SendStatus(fiber.StatusOK)
+	c.Status(http.StatusOK)
 }

@@ -1,8 +1,11 @@
 package handlers
 
 import (
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+
 	"github.com/elskow/codepair/core-cp/internal/domain"
-	"github.com/gofiber/fiber/v2"
 )
 
 type AuthHandler struct {
@@ -10,22 +13,19 @@ type AuthHandler struct {
 }
 
 func NewAuthHandler(authService domain.AuthService) *AuthHandler {
-	return &AuthHandler{
-		authService: authService,
-	}
+	return &AuthHandler{authService: authService}
 }
 
-func (h *AuthHandler) Register(c *fiber.Ctx) error {
+func (h *AuthHandler) Register(c *gin.Context) {
 	var request struct {
-		Email    string `json:"email" validate:"required,email"`
-		Password string `json:"password" validate:"required,min=8"`
-		Name     string `json:"name" validate:"required"`
+		Email    string `json:"email" binding:"required,email"`
+		Password string `json:"password" binding:"required,min=8"`
+		Name     string `json:"name" binding:"required"`
 	}
 
-	if err := c.BodyParser(&request); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "invalid request body",
-		})
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 
 	user := &domain.User{
@@ -34,38 +34,33 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 		Name:     request.Name,
 	}
 
-	if err := h.authService.Register(c.Context(), user); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+	if err := h.authService.Register(c.Request.Context(), user); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
 
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+	c.JSON(http.StatusCreated, gin.H{
 		"message": "user registered successfully",
 		"userId":  user.ID,
 	})
 }
 
-func (h *AuthHandler) Login(c *fiber.Ctx) error {
+func (h *AuthHandler) Login(c *gin.Context) {
 	var request struct {
-		Email    string `json:"email" validate:"required,email"`
-		Password string `json:"password" validate:"required"`
+		Email    string `json:"email" binding:"required,email"`
+		Password string `json:"password" binding:"required"`
 	}
 
-	if err := c.BodyParser(&request); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "invalid request body",
-		})
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 
-	token, err := h.authService.Login(c.Context(), request.Email, request.Password)
+	token, err := h.authService.Login(c.Request.Context(), request.Email, request.Password)
 	if err != nil {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
 	}
 
-	return c.JSON(fiber.Map{
-		"token": token,
-	})
+	c.JSON(http.StatusOK, gin.H{"token": token})
 }

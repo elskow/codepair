@@ -1,110 +1,82 @@
 package middleware
 
 import (
+	"net/http"
 	"strings"
 	"time"
 
 	"github.com/elskow/codepair/core-cp/internal/domain"
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/cors"
-	"github.com/gofiber/fiber/v2/middleware/limiter"
+	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+	"golang.org/x/time/rate"
 )
 
-type AuthMiddleware struct {
-	authService domain.AuthService
-	logger      *zap.Logger
-}
-
-func NewAuthMiddleware(authService domain.AuthService, logger *zap.Logger) *AuthMiddleware {
-	return &AuthMiddleware{
-		authService: authService,
-		logger:      logger,
-	}
-}
-
-func (m *AuthMiddleware) RequireAuth() fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		authHeader := c.Get("Authorization")
+func RequireAuth(authService domain.AuthService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
-			m.logger.Info("missing authorization header",
-				zap.String("path", c.Path()),
-				zap.String("ip", c.IP()),
-			)
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "missing authorization header",
-			})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing authorization header"})
+			return
 		}
 
 		parts := strings.Split(authHeader, " ")
 		if len(parts) != 2 || parts[0] != "Bearer" {
-			m.logger.Info("invalid authorization header format",
-				zap.String("path", c.Path()),
-				zap.String("ip", c.IP()),
-			)
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "invalid authorization header format",
-			})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid authorization header format"})
+			return
 		}
 
-		token := parts[1]
-		user, err := m.authService.ValidateToken(c.Context(), token)
+		user, err := authService.ValidateToken(c.Request.Context(), parts[1])
 		if err != nil {
-			m.logger.Info("invalid or expired token",
-				zap.String("path", c.Path()),
-				zap.String("ip", c.IP()),
-				zap.Error(err),
-			)
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "invalid or expired token",
-			})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired token"})
+			return
 		}
 
-		c.Locals("user", user)
-		return c.Next()
+		c.Set("user", user)
+		c.Next()
 	}
 }
 
-// Logger middleware with proper zap logger
-func LoggerMiddleware(logger *zap.Logger) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+func Logger(logger *zap.Logger) gin.HandlerFunc {
+	return func(c *gin.Context) {
 		start := time.Now()
-
-		err := c.Next()
+		c.Next()
 
 		logger.Info("request processed",
-			zap.String("method", c.Method()),
-			zap.String("path", c.Path()),
-			zap.Int("status", c.Response().StatusCode()),
+			zap.String("method", c.Request.Method),
+			zap.String("path", c.Request.URL.Path),
+			zap.Int("status", c.Writer.Status()),
 			zap.Duration("latency", time.Since(start)),
-			zap.String("ip", c.IP()),
+			zap.String("ip", c.ClientIP()),
 		)
-
-		return err
 	}
 }
 
-// CORS middleware configuration
-func CORSMiddleware() fiber.Handler {
-	return cors.New(cors.Config{
-		AllowMethods: "GET,POST,PUT,DELETE,OPTIONS",
-		AllowHeaders: "Origin,Content-Type,Accept,Authorization",
-		MaxAge:       300,
-	})
+func CORS() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Header("Access-Control-Allow-Origin", "*")
+		c.Header("Access-Control-Allow-Credentials", "true")
+		c.Header("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+		c.Header("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
+		c.Header("Access-Control-Expose-Headers", "Content-Length")
+		c.Header("Access-Control-Max-Age", "86400")
+
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(http.StatusNoContent)
+			return
+		}
+
+		c.Next()
+	}
 }
 
-// Rate limiter middleware configuration
-func RateLimiterMiddleware() fiber.Handler {
-	return limiter.New(limiter.Config{
-		Max:        30,
-		Expiration: 1 * time.Minute,
-		KeyGenerator: func(c *fiber.Ctx) string {
-			return c.IP()
-		},
-		LimitReached: func(c *fiber.Ctx) error {
-			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
-				"error": "too many requests",
-			})
-		},
-	})
+func RateLimiter() gin.HandlerFunc {
+	limiter := rate.NewLimiter(rate.Every(time.Minute), 30)
+
+	return func(c *gin.Context) {
+		if !limiter.Allow() {
+			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": "too many requests"})
+			return
+		}
+		c.Next()
+	}
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -12,7 +13,7 @@ import (
 	"github.com/elskow/codepair/core-cp/internal/middleware"
 	"github.com/elskow/codepair/core-cp/internal/repository/postgres"
 	"github.com/elskow/codepair/core-cp/internal/service"
-	"github.com/gofiber/fiber/v2"
+	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
 
@@ -30,17 +31,15 @@ func main() {
 		logger.Fatal("failed to load configuration", zap.Error(err))
 	}
 
-	// Initialize database connection
+	// Initialize database
 	db, err := postgres.NewConnection(cfg.Database.GetDSN())
 	if err != nil {
 		logger.Fatal("failed to connect to database", zap.Error(err))
 	}
 
-	// Initialize repositories
+	// Initialize repositories and services
 	userRepo := postgres.NewUserRepository(db)
 	roomRepo := postgres.NewRoomRepository(db)
-
-	// Initialize services
 	authService := service.NewAuthService(userRepo, cfg)
 	roomService := service.NewRoomService(roomRepo)
 
@@ -48,72 +47,63 @@ func main() {
 	authHandler := handlers.NewAuthHandler(authService)
 	roomHandler := handlers.NewRoomHandler(roomService)
 
-	// Initialize middleware
-	authMiddleware := middleware.NewAuthMiddleware(authService, logger)
+	// Initialize Gin
+	r := gin.Default()
 
-	// Initialize Fiber app
-	app := fiber.New(fiber.Config{
-		AppName: "CodePair Core Service",
-		ErrorHandler: func(c *fiber.Ctx, err error) error {
-			logger.Error("request error",
-				zap.Error(err),
-				zap.String("path", c.Path()),
-				zap.String("method", c.Method()),
-			)
+	// Middlewares
+	r.Use(middleware.Logger(logger))
+	r.Use(middleware.CORS())
 
-			code := fiber.StatusInternalServerError
-			if e, ok := err.(*fiber.Error); ok {
-				code = e.Code
-			}
+	// Routes
+	api := r.Group("/api")
+	{
+		// Auth routes
+		auth := api.Group("/auth")
+		{
+			auth.POST("/register", authHandler.Register)
+			auth.POST("/login", authHandler.Login)
+		}
 
-			return c.Status(code).JSON(fiber.Map{
-				"error": err.Error(),
-			})
-		},
-	})
+		// Room routes
+		rooms := api.Group("/rooms")
+		rooms.Use(middleware.RequireAuth(authService))
+		{
+			rooms.POST("", roomHandler.CreateRoom)
+			rooms.GET("", roomHandler.GetInterviewerRooms)
+			rooms.POST("/:roomId/end", roomHandler.EndInterview)
+		}
 
-	// Setup middleware
-	app.Use(middleware.LoggerMiddleware(logger))
-	app.Use(middleware.CORSMiddleware())
-	app.Use(middleware.RateLimiterMiddleware())
+		// Public room routes
+		api.GET("/rooms/join", roomHandler.JoinRoom)
+	}
 
-	// Setup routes
-	api := app.Group("/api")
+	r.RedirectTrailingSlash = false
+	r.RedirectFixedPath = false
 
-	// Auth routes (only for interviewers)
-	auth := api.Group("/auth")
-	auth.Post("/register", authHandler.Register)
-	auth.Post("/login", authHandler.Login)
+	// Server setup
+	srv := &http.Server{
+		Addr:    cfg.Server.Port,
+		Handler: r,
+	}
 
-	// Room routes that require authentication
-	rooms := api.Group("/rooms")
-	rooms.Use(authMiddleware.RequireAuth())              // Apply auth middleware to all routes in this group
-	rooms.Post("/", roomHandler.CreateRoom)              // Create interview room
-	rooms.Get("/", roomHandler.GetInterviewerRooms)      // List interviewer's rooms
-	rooms.Post("/:roomId/end", roomHandler.EndInterview) // End interview
-
-	// Public route for candidates (no auth required)
-	api.Get("/rooms/join", roomHandler.JoinRoom) // Join room with token
-	
-	// Graceful shutdown setup
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-
+	// Graceful shutdown
 	go func() {
-		if err := app.Listen(cfg.Server.Port); err != nil {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Fatal("failed to start server", zap.Error(err))
 		}
 	}()
 
-	logger.Info("server started", zap.String("port", cfg.Server.Port))
-
+	// Wait for interrupt signal
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
+
 	logger.Info("shutting down server...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.Server.ShutdownTimeout)
 	defer cancel()
 
-	if err := app.ShutdownWithContext(ctx); err != nil {
+	if err := srv.Shutdown(ctx); err != nil {
 		logger.Fatal("server forced to shutdown", zap.Error(err))
 	}
 
