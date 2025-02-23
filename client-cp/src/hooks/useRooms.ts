@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../services/apiClient";
-import type { Room, RoomSettings } from "../types/auth";
+import type { JoinRoomResponse, Room, RoomSettings } from "../types/auth";
 import { useAuth } from "./useAuth"; // Add this import
 
 export function useRooms() {
@@ -46,9 +46,9 @@ export function useRooms() {
 		},
 	});
 
-	const joinRoomMutation = useMutation<Room, Error, string>({
+	const joinRoomMutation = useMutation<JoinRoomResponse, Error, string>({
 		mutationFn: (token: string) =>
-			apiClient.get<Room>(`/rooms/join?token=${token}`),
+			apiClient.get<JoinRoomResponse>(`/rooms/join?token=${token}`),
 	});
 
 	return {

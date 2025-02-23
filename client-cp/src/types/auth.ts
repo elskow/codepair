@@ -34,4 +34,9 @@ export interface RoomSettings {
 	candidateName?: string;
 }
 
-export type JoinRoomFn = (token: string) => Promise<Room>;
+export interface JoinRoomResponse {
+	id: string;
+	roomId: string;
+	candidateName: string;
+	isActive: boolean;
+}

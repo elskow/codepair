@@ -1,7 +1,7 @@
-import type { Room } from "../types/auth";
-import type { ReactNode } from "react";
-import { RoomState } from "./RoomState";
 import { Loader } from "lucide-react";
+import type { ReactNode } from "react";
+import type { Room } from "../../types/auth.ts";
+import { RoomState } from "./RoomState.tsx";
 
 interface RoomLayoutProps {
 	room: Room | null;

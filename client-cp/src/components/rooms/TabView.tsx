@@ -1,6 +1,6 @@
 import { useState } from "react";
-import Chat from "./Chat";
-import Log from "./Log";
+import Chat from "./Chat.tsx";
+import Log from "./Log.tsx";
 
 const TabView = () => {
 	const [activeTab, setActiveTab] = useState<"chat" | "log">("chat");

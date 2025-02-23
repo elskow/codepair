@@ -3,18 +3,18 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Camera, CameraOff, Mic, MicOff } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import Clock from "../components/Clock";
-import { RoomLayout } from "../components/RoomLayout";
-import TabView from "../components/TabView";
-import VideoStream from "../components/VideoStream";
-import WriteSpace from "../components/WriteSpace";
+import Clock from "../components/rooms/Clock.tsx";
+import { RoomLayout } from "../components/rooms/RoomLayout.tsx";
+import TabView from "../components/rooms/TabView.tsx";
+import VideoStream from "../components/rooms/VideoStream.tsx";
+import WriteSpace from "../components/rooms/WriteSpace.tsx";
 import { SUPPORTED_LANGUAGES } from "../config/languages";
 import { useAuth } from "../hooks/useAuth";
 import useEditorPeer from "../hooks/useEditorPeer";
 import { useRooms } from "../hooks/useRooms";
 import useWebRTC from "../hooks/useWebRTC";
 import { apiClient } from "../services/apiClient";
-import type { Room, Room as RoomType } from "../types/auth";
+import type { Room as RoomType } from "../types/auth";
 
 export const Route = createFileRoute("/$roomId")({
 	component: RoomComponent,
@@ -119,8 +119,8 @@ function RoomComponent() {
 		const roomToken = urlParams.get("token");
 
 		try {
-			// Case 1: Authenticated interviewer
 			if (isAuthenticated) {
+				// Case 1: Authenticated interviewer - get room from list
 				const rooms = await apiClient.get<RoomType[]>("/rooms");
 				const currentRoom = rooms.find((r) => r.id === roomId);
 				if (currentRoom) {
@@ -130,38 +130,24 @@ function RoomComponent() {
 				throw new Error("Room not found");
 			}
 
-			// Case 2: Candidate with room token
 			if (roomToken) {
-				try {
-					const roomData = await joinRoom(roomToken);
-					console.log("Room data received:", roomData);
-
-					if (roomData && "roomId" in roomData) {
-						const roomObject: Room = {
-							id: String(roomData.roomId),
-							candidateName: roomData.candidateName,
-							isActive: true,
-							token: roomToken,
-						};
-
-						setRoom(roomObject);
-						setIsCandidate(true);
-						return;
-					}
-					throw new Error("Invalid room data format");
-				} catch (err) {
-					console.error("Error joining room:", err);
-					throw new Error(
-						err instanceof Error ? err.message : "Failed to join room",
-					);
-				}
+				// Case 2: Candidate with token - use joinRoom from useRooms hook
+				const response = await joinRoom(roomToken);
+				setRoom({
+					id: response.roomId,
+					candidateName: response.candidateName,
+					isActive: response.isActive,
+					token: roomToken,
+				});
+				setIsCandidate(true);
+				return;
 			}
 
-			// Case 3: Neither token nor authenticated
+			// Case 3: No token or auth
 			throw new Error("Authentication required");
 		} catch (err) {
 			setError(err instanceof Error ? err : new Error("Failed to load room"));
-			if (!roomToken && !isAuthenticated) {
+			if (!isAuthenticated) {
 				await navigate({ to: "/login" });
 			}
 		} finally {

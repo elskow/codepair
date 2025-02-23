@@ -1,6 +1,6 @@
-import { useState } from "react";
-import type { Room, RoomSettings } from "../types/auth";
 import { Check, X } from "lucide-react";
+import { useState } from "react";
+import type { Room, RoomSettings } from "../../types/auth.ts";
 
 interface RoomSettingsModalProps {
 	room: Room;

@@ -1,11 +1,11 @@
 import { createLazyFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Header } from "../components/layout/Header";
-import { MobileMenu } from "../components/layout/MobileMenu";
 import { CreateRoomForm } from "../components/index/CreateRoomForm";
 import { RoomList } from "../components/index/RoomList";
 import { RoomSearch } from "../components/index/RoomSearch";
-import { RoomSettingsModal } from "../components/RoomSettingsModal";
+import { Header } from "../components/layout/Header";
+import { MobileMenu } from "../components/layout/MobileMenu";
+import { RoomSettingsModal } from "../components/rooms/RoomSettingsModal.tsx";
 import { useAuth } from "../hooks/useAuth";
 import { useRooms } from "../hooks/useRooms";
 import type { Room, RoomSettings } from "../types/auth";
