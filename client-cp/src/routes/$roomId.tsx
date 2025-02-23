@@ -25,7 +25,6 @@ const URL = import.meta.env.VITE_WS_URL || "http://localhost:8001/";
 function RoomComponent() {
 	const { roomId } = Route.useParams();
 	const [room, setRoom] = useState<RoomType | null>(null);
-	const urlParams = new URLSearchParams(window.location.search);
 	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState<Error | null>(null);
 	const navigate = useNavigate();
@@ -163,7 +162,7 @@ function RoomComponent() {
 		} catch (err) {
 			setError(err instanceof Error ? err : new Error("Failed to load room"));
 			if (!roomToken && !isAuthenticated) {
-				navigate({ to: "/login" });
+				await navigate({ to: "/login" });
 			}
 		} finally {
 			setIsLoading(false);

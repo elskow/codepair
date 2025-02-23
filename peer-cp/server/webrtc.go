@@ -19,7 +19,7 @@ type WebRTCClient struct {
 	candidates []webrtc.ICECandidateInit
 }
 
-func (s *Server) handleVideoChatWS(c *websocket.Conn) {
+func (s *Server) HandleVideoChatWS(c *websocket.Conn) {
 	defer c.Close()
 
 	ctx := context.WithValue(context.Background(), "requestID", c.Params("requestId"))

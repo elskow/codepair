@@ -51,11 +51,6 @@ func NewServer(app *fiber.App, logger *zap.Logger, config config.Config) *Server
 	return server
 }
 
-func (s *Server) SetupRoutes() {
-	s.app.Get("/editor/:roomId", websocket.New(s.handleEditorWS))
-	s.app.Get("/videochat/:roomId", websocket.New(s.handleVideoChatWS))
-}
-
 func (s *Server) validateRoom(roomID, token string) (*client.Room, error) {
 	if token == "" {
 		return nil, fmt.Errorf("token is required")

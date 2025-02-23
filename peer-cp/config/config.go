@@ -12,6 +12,7 @@ type Config struct {
 		StunServerURL    string        `mapstructure:"stun_server_url"`
 		CleanupInterval  time.Duration `mapstructure:"cleanup_interval"`
 		ValidateInterval time.Duration `mapstructure:"validate_interval"`
+		ShutdownTimeout  time.Duration `mapstructure:"shutdown_timeout"`
 	} `mapstructure:"server"`
 	Core struct {
 		BaseURL string `mapstructure:"base_url"`
@@ -20,9 +21,6 @@ type Config struct {
 
 func LoadConfig(configFile string) (Config, error) {
 	viper.SetConfigFile(configFile)
-
-	viper.SetDefault("server.cleanup_interval", "1m")
-	viper.SetDefault("server.validate_interval", "5m")
 
 	if err := viper.ReadInConfig(); err != nil {
 		return Config{}, err
@@ -38,6 +36,10 @@ func LoadConfig(configFile string) (Config, error) {
 	}
 	if config.Server.ValidateInterval <= 0 {
 		config.Server.ValidateInterval = 5 * time.Minute // Default to 5 minutes
+	}
+
+	if config.Server.ShutdownTimeout <= 0 {
+		config.Server.ShutdownTimeout = 30 * time.Second // Default to 30 seconds
 	}
 
 	return config, nil

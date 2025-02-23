@@ -22,7 +22,7 @@ type Cursor struct {
 	Column int `json:"column"`
 }
 
-func (s *Server) handleEditorWS(c *websocket.Conn) {
+func (s *Server) HandleEditorWS(c *websocket.Conn) {
 	defer c.Close()
 
 	ctx := context.WithValue(context.Background(), "requestID", c.Params("requestId"))
