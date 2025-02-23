@@ -18,7 +18,11 @@ interface WebRTCHook {
 	toggleMicrophone: () => void;
 }
 
-const useWebRTC = (url: string | null, roomId: string): WebRTCHook => {
+const useWebRTC = (
+	url: string | null,
+	roomId: string,
+	token: string | null,
+): WebRTCHook => {
 	// States
 	const [connectionState, setConnectionState] = useState<ConnectionState>({
 		status: "Disconnected",
@@ -242,7 +246,7 @@ const useWebRTC = (url: string | null, roomId: string): WebRTCHook => {
 	);
 
 	const connectWebSocket = useCallback(() => {
-		if (!isComponentMounted.current || isConnecting.current) return;
+		if (!isComponentMounted.current || isConnecting.current || !token) return;
 		if (reconnectAttempts.current >= MAX_RECONNECT_ATTEMPTS) return;
 		if (ws.current?.readyState === WebSocket.OPEN) return;
 
@@ -251,7 +255,7 @@ const useWebRTC = (url: string | null, roomId: string): WebRTCHook => {
 		try {
 			cleanupWebSocket();
 
-			const socket = new WebSocket(`${url}/${roomId}`);
+			const socket = new WebSocket(`${url}/${roomId}?token=${token}`);
 			ws.current = socket;
 
 			socket.onmessage = (event) => {
@@ -312,6 +316,7 @@ const useWebRTC = (url: string | null, roomId: string): WebRTCHook => {
 		setupPeerConnection,
 		updateConnectionState,
 		url,
+		token,
 		cleanupWebSocket,
 	]);
 

@@ -9,16 +9,20 @@ interface EditorPeerHook {
 	handleLanguageChange: (event: React.ChangeEvent<HTMLSelectElement>) => void;
 }
 
-const useEditorPeer = (url: string | null, roomId: string): EditorPeerHook => {
+const useEditorPeer = (
+	url: string | null,
+	roomId: string,
+	token: string | null,
+): EditorPeerHook => {
 	const [ws, setWs] = useState<WebSocket | null>(null);
 	const [code, setCode] = useState("// Start coding...");
 	const [language, setLanguage] = useState("javascript");
 	const prevCodeRef = useRef(code);
 
 	useEffect(() => {
-		if (!url) return;
+		if (!url || !token) return;
 
-		const socket = new WebSocket(`${url}/${roomId}`);
+		const socket = new WebSocket(`${url}/${roomId}?token=${token}`);
 		setWs(socket);
 
 		const handleMessage = (event: MessageEvent) => {
@@ -39,7 +43,7 @@ const useEditorPeer = (url: string | null, roomId: string): EditorPeerHook => {
 			socket.removeEventListener("message", handleMessage);
 			socket.close();
 		};
-	}, [url, roomId]);
+	}, [url, roomId, token]);
 
 	const sendUpdate = useCallback(
 		(newCode: string, newLanguage: string) => {

@@ -1,28 +1,31 @@
-import {Editor} from "@monaco-editor/react";
-import {createFileRoute, useNavigate} from "@tanstack/react-router";
-import {Camera, CameraOff, Mic, MicOff} from "lucide-react";
+import { Editor } from "@monaco-editor/react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Camera, CameraOff, Mic, MicOff } from "lucide-react";
 import type React from "react";
-import {useCallback, useEffect, useRef, useState} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Clock from "../components/Clock";
-import {RoomLayout} from "../components/RoomLayout";
+import { RoomLayout } from "../components/RoomLayout";
 import TabView from "../components/TabView";
 import VideoStream from "../components/VideoStream";
 import WriteSpace from "../components/WriteSpace";
-import {SUPPORTED_LANGUAGES} from "../config/languages";
-import {useAuth} from "../hooks/useAuth";
+import { SUPPORTED_LANGUAGES } from "../config/languages";
+import { useAuth } from "../hooks/useAuth";
 import useEditorPeer from "../hooks/useEditorPeer";
-import {useRooms} from "../hooks/useRooms";
+import { useRooms } from "../hooks/useRooms";
 import useWebRTC from "../hooks/useWebRTC";
-import {apiClient} from "../services/apiClient";
-import type {Room, Room as RoomType} from "../types/auth";
+import { apiClient } from "../services/apiClient";
+import type { Room, Room as RoomType } from "../types/auth";
 
 export const Route = createFileRoute("/$roomId")({
 	component: RoomComponent,
 });
 
+const URL = import.meta.env.VITE_WS_URL || "http://localhost:8001/";
+
 function RoomComponent() {
 	const { roomId } = Route.useParams();
 	const [room, setRoom] = useState<RoomType | null>(null);
+	const urlParams = new URLSearchParams(window.location.search);
 	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState<Error | null>(null);
 	const navigate = useNavigate();
@@ -31,13 +34,15 @@ function RoomComponent() {
 	const [isCandidate, setIsCandidate] = useState(false);
 
 	const webRTC = useWebRTC(
-		room?.isActive ? "ws://localhost:8080/videochat" : null,
+		room?.isActive ? `${URL}/videochat` : null,
 		roomId,
+		room?.isActive ? room.token : null,
 	);
 
 	const editorPeer = useEditorPeer(
-		room?.isActive ? "ws://localhost:8080/editor" : null,
+		room?.isActive ? `${URL}/editor` : null,
 		roomId,
+		room?.isActive ? room.token : null,
 	);
 
 	const { localStream, remoteStream, toggleWebcam, toggleMicrophone } =
@@ -130,14 +135,14 @@ function RoomComponent() {
 			if (roomToken) {
 				try {
 					const roomData = await joinRoom(roomToken);
-					console.log('Room data received:', roomData);
+					console.log("Room data received:", roomData);
 
 					if (roomData && "roomId" in roomData) {
 						const roomObject: Room = {
 							id: String(roomData.roomId),
 							candidateName: roomData.candidateName,
 							isActive: true,
-							token: roomToken
+							token: roomToken,
 						};
 
 						setRoom(roomObject);
@@ -146,8 +151,10 @@ function RoomComponent() {
 					}
 					throw new Error("Invalid room data format");
 				} catch (err) {
-					console.error('Error joining room:', err);
-					throw new Error(err instanceof Error ? err.message : "Failed to join room");
+					console.error("Error joining room:", err);
+					throw new Error(
+						err instanceof Error ? err.message : "Failed to join room",
+					);
 				}
 			}
 
