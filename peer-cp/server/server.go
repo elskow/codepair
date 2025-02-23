@@ -61,10 +61,22 @@ func (s *Server) validateRoom(roomID, token string) (*client.Room, error) {
 		return nil, fmt.Errorf("token is required")
 	}
 
+	s.logger.Debug("Validating room",
+		zap.String("roomID", roomID),
+		zap.String("tokenPrefix", token[:10]))
+
 	room, err := s.coreClient.ValidateRoom(roomID, token)
 	if err != nil {
+		s.logger.Error("Room validation failed",
+			zap.String("roomID", roomID),
+			zap.Error(err))
 		return nil, fmt.Errorf("room validation failed: %w", err)
 	}
+
+	s.logger.Debug("Room validation result",
+		zap.String("roomID", roomID),
+		zap.Bool("isActive", room.IsActive),
+		zap.String("candidateName", room.CandidateName))
 
 	return room, nil
 }
@@ -99,7 +111,7 @@ func (s *Server) cleanupInactiveClients() {
 				delete(s.rooms, roomID)
 				continue
 			}
-			
+
 			room.clientsMutex.Lock()
 
 			// Check editor clients

@@ -28,15 +28,23 @@ func (s *Server) handleVideoChatWS(c *websocket.Conn) {
 	roomID := c.Params("roomId")
 	token := c.Query("token")
 
-	// Validate room with core service
+	logger.Debug("WebSocket connection attempt",
+		zap.String("roomID", roomID),
+		zap.String("tokenPresent", fmt.Sprintf("%t", token != "")))
+
 	validRoom, err := s.validateRoom(roomID, token)
 	if err != nil {
-		logger.Error("Room validation failed", zap.Error(err))
+		logger.Error("Room validation failed",
+			zap.String("roomID", roomID),
+			zap.Error(err))
 		return
 	}
 
 	if !validRoom.IsActive {
-		logger.Error("Room is not active")
+		logger.Error("Room is not active",
+			zap.String("roomID", roomID))
+		c.WriteMessage(websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.CloseNormalClosure, "Room is not active"))
 		return
 	}
 
@@ -86,6 +94,69 @@ func (s *Server) handleVideoChatWS(c *websocket.Conn) {
 		if err := c.WriteJSON(msg); err != nil {
 			logger.Error("Failed to send ICE candidate", zap.Error(err))
 		}
+	})
+
+	// Setup media handling
+	pc.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
+		s.logger.Info("Received track",
+			zap.String("roomID", roomID),
+			zap.String("trackID", track.ID()),
+			zap.String("kind", track.Kind().String()))
+
+		// Create a local track to forward the received track
+		localTrack, err := webrtc.NewTrackLocalStaticRTP(track.Codec().RTPCodecCapability, track.ID(), track.StreamID())
+		if err != nil {
+			s.logger.Error("Failed to create local track", zap.Error(err))
+			return
+		}
+
+		// Add the local track to all other peers
+		s.roomsMutex.RLock()
+		if room, exists := s.rooms[roomID]; exists {
+			for _, otherClient := range room.webrtcClients {
+				if otherClient.conn != c {
+					sender, err := otherClient.pc.AddTrack(localTrack)
+					if err != nil {
+						s.logger.Error("Failed to add track to peer", zap.Error(err))
+						continue
+					}
+
+					go func() {
+						rtcpBuf := make([]byte, 1500)
+						for {
+							if _, _, rtcpErr := sender.Read(rtcpBuf); rtcpErr != nil {
+								return
+							}
+						}
+					}()
+				}
+			}
+		}
+		s.roomsMutex.RUnlock()
+
+		// Read incoming track data and forward it
+		go func() {
+			rtpBuf := make([]byte, 1500)
+			for {
+				n, _, err := track.Read(rtpBuf)
+				if err != nil {
+					s.logger.Error("Failed to read from track", zap.Error(err))
+					return
+				}
+
+				if _, err = localTrack.Write(rtpBuf[:n]); err != nil {
+					s.logger.Error("Failed to write to local track", zap.Error(err))
+					return
+				}
+			}
+		}()
+	})
+
+	// State change handling
+	pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
+		s.logger.Info("Peer connection state changed",
+			zap.String("roomID", roomID),
+			zap.String("state", state.String()))
 	})
 
 	for {
@@ -152,54 +223,75 @@ func (s *Server) createPeerConnection() (*webrtc.PeerConnection, error) {
 
 	m := &webrtc.MediaEngine{}
 	if err := m.RegisterDefaultCodecs(); err != nil {
-		return nil, err
-	}
-
-	if err := m.RegisterCodec(webrtc.RTPCodecParameters{
-		RTPCodecCapability: webrtc.RTPCodecCapability{
-			MimeType: webrtc.MimeTypeVP9, ClockRate: 90000,
-			Channels: 0, SDPFmtpLine: "", RTCPFeedback: nil},
-		PayloadType: 96}, webrtc.RTPCodecTypeVideo); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to register default codecs: %w", err)
 	}
 
 	api := webrtc.NewAPI(webrtc.WithMediaEngine(m))
+	pc, err := api.NewPeerConnection(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create peer connection: %w", err)
+	}
 
-	return api.NewPeerConnection(config)
+	if _, err := pc.AddTransceiverFromKind(webrtc.RTPCodecTypeVideo, webrtc.RTPTransceiverInit{
+		Direction: webrtc.RTPTransceiverDirectionSendrecv,
+	}); err != nil {
+		return nil, fmt.Errorf("failed to add video transceiver: %w", err)
+	}
+
+	if _, err := pc.AddTransceiverFromKind(webrtc.RTPCodecTypeAudio, webrtc.RTPTransceiverInit{
+		Direction: webrtc.RTPTransceiverDirectionSendrecv,
+	}); err != nil {
+		return nil, fmt.Errorf("failed to add audio transceiver: %w", err)
+	}
+
+	return pc, nil
 }
 
 func (s *Server) handleSDP(ctx context.Context, client *WebRTCClient, sdp map[string]interface{}) error {
+	logger := s.getLogger(ctx)
+	logger.Debug("Handling SDP", zap.Any("type", sdp["type"]))
+
 	sdpJSON, err := json.Marshal(sdp)
 	if err != nil {
+		logger.Error("Failed to marshal SDP", zap.Error(err))
 		return fmt.Errorf("failed to marshal SDP: %w", err)
 	}
 
 	var sessionDesc webrtc.SessionDescription
 	if err := json.Unmarshal(sdpJSON, &sessionDesc); err != nil {
+		logger.Error("Failed to parse SDP", zap.Error(err))
 		return fmt.Errorf("failed to parse SDP: %w", err)
 	}
 
+	logger.Debug("Setting remote description")
 	if err := client.pc.SetRemoteDescription(sessionDesc); err != nil {
+		logger.Error("Failed to set remote description", zap.Error(err))
 		return fmt.Errorf("failed to set remote description: %w", err)
 	}
 
 	if sessionDesc.Type == webrtc.SDPTypeOffer {
+		logger.Debug("Creating answer")
 		answer, err := client.pc.CreateAnswer(nil)
 		if err != nil {
+			logger.Error("Failed to create answer", zap.Error(err))
 			return fmt.Errorf("failed to create answer: %w", err)
 		}
 
+		logger.Debug("Setting local description")
 		if err := client.pc.SetLocalDescription(answer); err != nil {
+			logger.Error("Failed to set local description", zap.Error(err))
 			return fmt.Errorf("failed to set local description: %w", err)
 		}
 
 		client.writeMutex.Lock()
 		defer client.writeMutex.Unlock()
 
+		logger.Debug("Sending answer")
 		if err := client.conn.WriteJSON(map[string]interface{}{
 			"type": "answer",
 			"sdp":  answer,
 		}); err != nil {
+			logger.Error("Failed to send answer", zap.Error(err))
 			return fmt.Errorf("failed to send answer: %w", err)
 		}
 	}
@@ -208,24 +300,30 @@ func (s *Server) handleSDP(ctx context.Context, client *WebRTCClient, sdp map[st
 }
 
 func (s *Server) handleICECandidate(ctx context.Context, client *WebRTCClient, candidate map[string]interface{}) error {
+	logger := s.getLogger(ctx)
+	logger.Debug("Handling ICE candidate")
+
 	candidateJSON, err := json.Marshal(candidate)
 	if err != nil {
+		logger.Error("Failed to marshal ICE candidate", zap.Error(err))
 		return fmt.Errorf("failed to marshal ICE candidate: %w", err)
 	}
 
 	var iceCandidate webrtc.ICECandidateInit
 	if err := json.Unmarshal(candidateJSON, &iceCandidate); err != nil {
+		logger.Error("Failed to parse ICE candidate", zap.Error(err))
 		return fmt.Errorf("failed to parse ICE candidate: %w", err)
 	}
 
-	// If remote description isn't set yet, store the candidate
 	if client.pc.RemoteDescription() == nil {
+		logger.Debug("Storing ICE candidate for later")
 		client.candidates = append(client.candidates, iceCandidate)
 		return nil
 	}
 
-	// Add the candidate if remote description is set
+	logger.Debug("Adding ICE candidate")
 	if err := client.pc.AddICECandidate(iceCandidate); err != nil {
+		logger.Error("Failed to add ICE candidate", zap.Error(err))
 		return fmt.Errorf("failed to add ICE candidate: %w", err)
 	}
 

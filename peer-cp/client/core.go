@@ -14,9 +14,10 @@ type CoreClient struct {
 
 type Room struct {
 	ID            string `json:"id"`
+	RoomID        string `json:"roomId"`
 	CandidateName string `json:"candidateName"`
 	IsActive      bool   `json:"isActive"`
-	Token         string `json:"token"`
+	Token         string `json:"token,omitempty"`
 }
 
 func NewCoreClient(baseURL string) *CoreClient {
@@ -48,10 +49,6 @@ func (c *CoreClient) ValidateRoom(roomID, token string) (*Room, error) {
 	var room Room
 	if err := json.NewDecoder(resp.Body).Decode(&room); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	if !room.IsActive {
-		return nil, fmt.Errorf("room is no longer active")
 	}
 
 	return &room, nil

@@ -45,6 +45,8 @@ func main() {
 			if token == "" {
 				return fiber.ErrUnauthorized
 			}
+			c.Set("Upgrade", "websocket")
+			c.Set("Connection", "Upgrade")
 			c.Locals("allowed", true)
 			return c.Next()
 		}
@@ -57,6 +59,8 @@ func main() {
 			if token == "" {
 				return fiber.ErrUnauthorized
 			}
+			c.Set("Upgrade", "websocket")
+			c.Set("Connection", "Upgrade")
 			c.Locals("allowed", true)
 			return c.Next()
 		}
