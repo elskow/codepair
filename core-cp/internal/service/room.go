@@ -66,11 +66,11 @@ func (s *roomService) GetRoom(ctx context.Context, id uuid.UUID) (*domain.Room, 
 func (s *roomService) ValidateRoomToken(ctx context.Context, token string) (*domain.Room, error) {
 	room, err := s.roomRepo.FindByToken(ctx, token)
 	if err != nil {
-		return nil, err
+		return nil, errors.New("invalid token")
 	}
 
 	if !room.IsActive {
-		return nil, errors.New("room is no longer active")
+		return room, nil
 	}
 
 	return room, nil

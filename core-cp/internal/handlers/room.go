@@ -113,8 +113,10 @@ func (h *RoomHandler) JoinRoom(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
+		"id":            room.ID,
 		"roomId":        room.ID,
 		"candidateName": room.CandidateName,
+		"isActive":      room.IsActive,
 	})
 }
 
