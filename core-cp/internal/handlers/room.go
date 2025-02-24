@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"net/http"
-	"strconv"
+	"time"
 
 	"github.com/elskow/codepair/core-cp/internal/domain"
 	"github.com/gin-gonic/gin"
@@ -62,7 +62,14 @@ func (h *RoomHandler) UpdateRoomSettings(c *gin.Context) {
 		return
 	}
 
-	c.Status(http.StatusOK)
+	// Get updated room
+	room, err := h.roomService.GetRoom(c.Request.Context(), roomID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, roomToResponse(*room))
 }
 
 // CreateRoom - Only for interviewers
@@ -126,25 +133,23 @@ func (h *RoomHandler) GetInterviewerRooms(c *gin.Context) {
 	interviewer := c.MustGet("user").(*domain.User)
 
 	params := domain.ListRoomsParams{
-		SortBy:    c.DefaultQuery("sortBy", "created_at"),
+		// Default to sorting by updated_at desc
+		SortBy:    c.DefaultQuery("sortBy", "updated_at"),
 		SortOrder: c.DefaultQuery("sortOrder", "desc"),
-		Limit:     20, // Default limit
+		Limit:     20,
+	}
+
+	// Validate sort parameters
+	if params.SortBy != "updated_at" && params.SortBy != "created_at" {
+		params.SortBy = "updated_at"
+	}
+	if params.SortOrder != "asc" && params.SortOrder != "desc" {
+		params.SortOrder = "desc"
 	}
 
 	if status := c.Query("status"); status != "" {
 		isActive := status == "active"
 		params.Status = &isActive
-	}
-
-	if limit := c.Query("limit"); limit != "" {
-		if limitInt, err := strconv.Atoi(limit); err == nil && limitInt > 0 {
-			params.Limit = limitInt
-		}
-	}
-	if offset := c.Query("offset"); offset != "" {
-		if offsetInt, err := strconv.Atoi(offset); err == nil && offsetInt >= 0 {
-			params.Offset = offsetInt
-		}
 	}
 
 	rooms, err := h.roomService.ListRooms(c.Request.Context(), interviewer.ID, params)
@@ -153,24 +158,12 @@ func (h *RoomHandler) GetInterviewerRooms(c *gin.Context) {
 		return
 	}
 
-	roomResponses := make([]gin.H, len(rooms))
+	response := make([]gin.H, len(rooms))
 	for i, room := range rooms {
-		roomResponses[i] = gin.H{
-			"id":            room.ID,
-			"candidateName": room.CandidateName,
-			"token":         room.Token,
-			"isActive":      room.IsActive,
-			"createdAt":     room.CreatedAt,
-			"updatedAt":     room.UpdatedAt,
-			"interviewer": gin.H{
-				"id":    room.Interviewer.ID,
-				"email": room.Interviewer.Email,
-				"name":  room.Interviewer.Name,
-			},
-		}
+		response[i] = roomToResponse(room)
 	}
 
-	c.JSON(http.StatusOK, roomResponses)
+	c.JSON(http.StatusOK, response)
 }
 
 // EndInterview - Only for interviewers
@@ -192,4 +185,56 @@ func (h *RoomHandler) EndInterview(c *gin.Context) {
 	}
 
 	c.Status(http.StatusOK)
+}
+
+// DeleteRoom - Only for interviewers
+func (h *RoomHandler) DeleteRoom(c *gin.Context) {
+	roomID, err := uuid.Parse(c.Param("roomId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "invalid room ID",
+		})
+		return
+	}
+
+	interviewer := c.MustGet("user").(*domain.User)
+	if err := h.roomService.DeleteRoom(c.Request.Context(), roomID, interviewer.ID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+func roomToResponse(room domain.Room) gin.H {
+	response := gin.H{
+		"id":            room.ID,
+		"candidateName": room.CandidateName,
+		"token":         room.Token,
+		"isActive":      room.IsActive,
+		"createdAt":     room.CreatedAt,
+		"updatedAt":     room.UpdatedAt,
+	}
+
+	if room.ScheduledTime != nil {
+		response["scheduledTime"] = room.ScheduledTime.Format(time.RFC3339)
+	}
+	if room.Duration > 0 {
+		response["duration"] = room.Duration
+	}
+	if len(room.TechnicalStack) > 0 {
+		response["technicalStack"] = room.TechnicalStack
+	}
+
+	if room.Interviewer.ID != uuid.Nil {
+		response["interviewer"] = gin.H{
+			"id":    room.Interviewer.ID,
+			"email": room.Interviewer.Email,
+			"name":  room.Interviewer.Name,
+		}
+	}
+
+	return response
 }

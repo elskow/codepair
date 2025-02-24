@@ -42,6 +42,10 @@ func (s *roomService) CreateRoom(ctx context.Context, interviewer *domain.User, 
 	return room, nil
 }
 
+func (s *roomService) GetRoom(ctx context.Context, roomID uuid.UUID) (*domain.Room, error) {
+	return s.roomRepo.GetRoom(ctx, roomID)
+}
+
 func (s *roomService) ListRooms(ctx context.Context, interviewerID uuid.UUID, params domain.ListRoomsParams) ([]domain.Room, error) {
 	return s.roomRepo.ListRooms(ctx, interviewerID, params)
 }
@@ -87,4 +91,18 @@ func (s *roomService) EndInterview(ctx context.Context, roomID uuid.UUID, interv
 	}
 
 	return s.roomRepo.SetActive(ctx, roomID, false)
+}
+
+func (s *roomService) DeleteRoom(ctx context.Context, roomID uuid.UUID, interviewerID uuid.UUID) error {
+	// First check if the room exists and belongs to the interviewer
+	room, err := s.roomRepo.FindByID(ctx, roomID)
+	if err != nil {
+		return err
+	}
+
+	if room.InterviewerID != interviewerID {
+		return errors.New("unauthorized: not the interviewer of this room")
+	}
+
+	return s.roomRepo.Delete(ctx, roomID)
 }

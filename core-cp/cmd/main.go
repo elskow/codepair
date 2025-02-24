@@ -9,16 +9,15 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gin-gonic/gin"
-	"github.com/lesismal/nbio/nbhttp"
-	"go.uber.org/zap"
-
 	"github.com/elskow/codepair/core-cp/config"
 	"github.com/elskow/codepair/core-cp/internal/domain"
 	"github.com/elskow/codepair/core-cp/internal/handlers"
 	"github.com/elskow/codepair/core-cp/internal/middleware"
 	"github.com/elskow/codepair/core-cp/internal/repository/postgres"
 	"github.com/elskow/codepair/core-cp/internal/service"
+	"github.com/gin-gonic/gin"
+	"github.com/lesismal/nbio/nbhttp"
+	"go.uber.org/zap"
 )
 
 func setupRouter(
@@ -55,6 +54,7 @@ func setupRouter(
 			protected.GET("", roomHandler.GetInterviewerRooms)
 			protected.POST("", roomHandler.CreateRoom)
 			protected.GET("/search", roomHandler.SearchRooms)
+			protected.DELETE("/:roomId", roomHandler.DeleteRoom)
 			protected.POST("/:roomId/end", roomHandler.EndInterview)
 			protected.PATCH("/:roomId/settings", roomHandler.UpdateRoomSettings)
 		}

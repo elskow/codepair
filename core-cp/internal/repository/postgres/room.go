@@ -3,9 +3,12 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/elskow/codepair/core-cp/internal/domain"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"gorm.io/gorm"
 )
 
@@ -17,27 +20,45 @@ func NewRoomRepository(db *gorm.DB) domain.RoomRepository {
 	return &roomRepository{db: db}
 }
 
+func (r *roomRepository) GetRoom(ctx context.Context, roomID uuid.UUID) (*domain.Room, error) {
+	var room domain.Room
+	err := r.db.WithContext(ctx).
+		Preload("Interviewer").
+		First(&room, "id = ?", roomID).
+		Error
+	if err != nil {
+		return nil, err
+	}
+	return &room, nil
+}
+
 func (r *roomRepository) ListRooms(ctx context.Context, interviewerID uuid.UUID, params domain.ListRoomsParams) ([]domain.Room, error) {
 	var rooms []domain.Room
+
 	query := r.db.WithContext(ctx).
-		Preload("Interviewer").
-		Where("interviewer_id = ?", interviewerID)
+		Select("rooms.*").
+		Joins("LEFT JOIN users ON rooms.interviewer_id = users.id").
+		Where("rooms.interviewer_id = ?", interviewerID)
 
 	if params.Status != nil {
-		query = query.Where("is_active = ?", *params.Status)
+		query = query.Where("rooms.is_active = ?", *params.Status)
 	}
 
-	sortBy := "created_at"
+	var orderClauses []string
+	orderClauses = append(orderClauses, "rooms.is_active DESC")
+
 	if params.SortBy == "updated_at" {
-		sortBy = "updated_at"
+		orderClauses = append(orderClauses,
+			fmt.Sprintf("rooms.updated_at %s", params.SortOrder),
+			fmt.Sprintf("rooms.created_at %s", params.SortOrder),
+		)
+	} else {
+		orderClauses = append(orderClauses,
+			fmt.Sprintf("rooms.created_at %s", params.SortOrder),
+		)
 	}
 
-	sortOrder := "desc"
-	if params.SortOrder == "asc" {
-		sortOrder = "asc"
-	}
-
-	query = query.Order(fmt.Sprintf("%s %s", sortBy, sortOrder))
+	query = query.Order(strings.Join(orderClauses, ", "))
 
 	if params.Limit > 0 {
 		query = query.Limit(params.Limit)
@@ -46,7 +67,7 @@ func (r *roomRepository) ListRooms(ctx context.Context, interviewerID uuid.UUID,
 		query = query.Offset(params.Offset)
 	}
 
-	err := query.Find(&rooms).Error
+	err := query.Preload("Interviewer").Find(&rooms).Error
 	return rooms, err
 }
 
@@ -67,6 +88,18 @@ func (r *roomRepository) UpdateRoomSettings(ctx context.Context, id uuid.UUID, s
 	}
 	if settings.CandidateName != nil {
 		updates["candidate_name"] = *settings.CandidateName
+	}
+	if settings.ScheduledTime != nil {
+		scheduledTime, err := time.Parse(time.RFC3339, *settings.ScheduledTime)
+		if err == nil {
+			updates["scheduled_time"] = scheduledTime
+		}
+	}
+	if settings.Duration != nil {
+		updates["duration"] = *settings.Duration
+	}
+	if settings.TechnicalStack != nil {
+		updates["technical_stack"] = pq.StringArray(settings.TechnicalStack)
 	}
 
 	return r.db.WithContext(ctx).
@@ -100,4 +133,8 @@ func (r *roomRepository) FindByToken(ctx context.Context, token string) (*domain
 
 func (r *roomRepository) SetActive(ctx context.Context, id uuid.UUID, active bool) error {
 	return r.db.WithContext(ctx).Model(&domain.Room{}).Where("id = ?", id).Update("is_active", active).Error
+}
+
+func (r *roomRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Delete(&domain.Room{}, "id = ?", id).Error
 }

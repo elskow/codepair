@@ -16,10 +16,12 @@ type RoomRepository interface {
 	Create(ctx context.Context, room *Room) error
 	FindByID(ctx context.Context, id uuid.UUID) (*Room, error)
 	FindByToken(ctx context.Context, token string) (*Room, error)
+	GetRoom(ctx context.Context, roomID uuid.UUID) (*Room, error)
 	ListRooms(ctx context.Context, interviewerID uuid.UUID, params ListRoomsParams) ([]Room, error)
 	SetActive(ctx context.Context, id uuid.UUID, active bool) error
 	SearchRooms(ctx context.Context, interviewerID uuid.UUID, query string) ([]Room, error)
 	UpdateRoomSettings(ctx context.Context, id uuid.UUID, settings RoomSettings) error
+	Delete(ctx context.Context, id uuid.UUID) error
 }
 
 type AuthService interface {
@@ -31,9 +33,11 @@ type AuthService interface {
 
 type RoomService interface {
 	CreateRoom(ctx context.Context, interviewer *User, candidateName string) (*Room, error)
+	GetRoom(ctx context.Context, roomID uuid.UUID) (*Room, error)
 	ValidateRoomToken(ctx context.Context, token string) (*Room, error)
 	ListRooms(ctx context.Context, interviewerID uuid.UUID, params ListRoomsParams) ([]Room, error)
 	EndInterview(ctx context.Context, roomID uuid.UUID, interviewerID uuid.UUID) error
 	SearchRooms(ctx context.Context, interviewerID uuid.UUID, query string) ([]Room, error)
 	UpdateRoomSettings(ctx context.Context, roomID uuid.UUID, interviewerID uuid.UUID, settings RoomSettings) error
+	DeleteRoom(ctx context.Context, roomID uuid.UUID, interviewerID uuid.UUID) error
 }
