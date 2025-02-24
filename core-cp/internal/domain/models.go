@@ -22,6 +22,13 @@ type Room struct {
 	CandidateName string    `gorm:"not null"`
 	Token         string    `gorm:"unique;not null"`
 	IsActive      bool      `gorm:"default:true"`
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+
+	ScheduledTime  *time.Time `gorm:"index"`
+	Duration       int        `gorm:"default:60"` // in minutes
+	TechnicalStack []string   `gorm:"type:text[]"`
+	Description    string     `gorm:"type:text"`
+	Notes          string     `gorm:"type:text"`
+
+	CreatedAt time.Time `gorm:"index"`
+	UpdatedAt time.Time `gorm:"index"`
 }

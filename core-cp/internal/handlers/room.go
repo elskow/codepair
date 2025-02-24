@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/elskow/codepair/core-cp/internal/domain"
 	"github.com/gin-gonic/gin"
@@ -123,15 +124,35 @@ func (h *RoomHandler) JoinRoom(c *gin.Context) {
 // GetInterviewerRooms - Only for interviewers
 func (h *RoomHandler) GetInterviewerRooms(c *gin.Context) {
 	interviewer := c.MustGet("user").(*domain.User)
-	rooms, err := h.roomService.GetInterviewerRooms(c.Request.Context(), interviewer.ID)
+
+	params := domain.ListRoomsParams{
+		SortBy:    c.DefaultQuery("sortBy", "created_at"),
+		SortOrder: c.DefaultQuery("sortOrder", "desc"),
+		Limit:     20, // Default limit
+	}
+
+	if status := c.Query("status"); status != "" {
+		isActive := status == "active"
+		params.Status = &isActive
+	}
+
+	if limit := c.Query("limit"); limit != "" {
+		if limitInt, err := strconv.Atoi(limit); err == nil && limitInt > 0 {
+			params.Limit = limitInt
+		}
+	}
+	if offset := c.Query("offset"); offset != "" {
+		if offsetInt, err := strconv.Atoi(offset); err == nil && offsetInt >= 0 {
+			params.Offset = offsetInt
+		}
+	}
+
+	rooms, err := h.roomService.ListRooms(c.Request.Context(), interviewer.ID, params)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Convert rooms to response format
 	roomResponses := make([]gin.H, len(rooms))
 	for i, room := range rooms {
 		roomResponses[i] = gin.H{
@@ -139,6 +160,13 @@ func (h *RoomHandler) GetInterviewerRooms(c *gin.Context) {
 			"candidateName": room.CandidateName,
 			"token":         room.Token,
 			"isActive":      room.IsActive,
+			"createdAt":     room.CreatedAt,
+			"updatedAt":     room.UpdatedAt,
+			"interviewer": gin.H{
+				"id":    room.Interviewer.ID,
+				"email": room.Interviewer.Email,
+				"name":  room.Interviewer.Name,
+			},
 		}
 	}
 

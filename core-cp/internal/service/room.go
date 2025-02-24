@@ -14,23 +14,6 @@ type roomService struct {
 	roomRepo domain.RoomRepository
 }
 
-func (s *roomService) SearchRooms(ctx context.Context, interviewerID uuid.UUID, query string) ([]domain.Room, error) {
-	return s.roomRepo.SearchRooms(ctx, interviewerID, query)
-}
-
-func (s *roomService) UpdateRoomSettings(ctx context.Context, roomID uuid.UUID, interviewerID uuid.UUID, settings domain.RoomSettings) error {
-	room, err := s.roomRepo.FindByID(ctx, roomID)
-	if err != nil {
-		return err
-	}
-
-	if room.InterviewerID != interviewerID {
-		return errors.New("unauthorized: not the interviewer of this room")
-	}
-
-	return s.roomRepo.UpdateRoomSettings(ctx, roomID, settings)
-}
-
 func NewRoomService(roomRepo domain.RoomRepository) domain.RoomService {
 	return &roomService{
 		roomRepo: roomRepo,
@@ -59,8 +42,25 @@ func (s *roomService) CreateRoom(ctx context.Context, interviewer *domain.User, 
 	return room, nil
 }
 
-func (s *roomService) GetRoom(ctx context.Context, id uuid.UUID) (*domain.Room, error) {
-	return s.roomRepo.FindByID(ctx, id)
+func (s *roomService) ListRooms(ctx context.Context, interviewerID uuid.UUID, params domain.ListRoomsParams) ([]domain.Room, error) {
+	return s.roomRepo.ListRooms(ctx, interviewerID, params)
+}
+
+func (s *roomService) SearchRooms(ctx context.Context, interviewerID uuid.UUID, query string) ([]domain.Room, error) {
+	return s.roomRepo.SearchRooms(ctx, interviewerID, query)
+}
+
+func (s *roomService) UpdateRoomSettings(ctx context.Context, roomID uuid.UUID, interviewerID uuid.UUID, settings domain.RoomSettings) error {
+	room, err := s.roomRepo.FindByID(ctx, roomID)
+	if err != nil {
+		return err
+	}
+
+	if room.InterviewerID != interviewerID {
+		return errors.New("unauthorized: not the interviewer of this room")
+	}
+
+	return s.roomRepo.UpdateRoomSettings(ctx, roomID, settings)
 }
 
 func (s *roomService) ValidateRoomToken(ctx context.Context, token string) (*domain.Room, error) {
@@ -74,10 +74,6 @@ func (s *roomService) ValidateRoomToken(ctx context.Context, token string) (*dom
 	}
 
 	return room, nil
-}
-
-func (s *roomService) GetInterviewerRooms(ctx context.Context, interviewerID uuid.UUID) ([]domain.Room, error) {
-	return s.roomRepo.FindByInterviewer(ctx, interviewerID)
 }
 
 func (s *roomService) EndInterview(ctx context.Context, roomID uuid.UUID, interviewerID uuid.UUID) error {
