@@ -47,4 +47,6 @@ export interface JoinRoomResponse {
 	roomId: string;
 	candidateName: string;
 	isActive: boolean;
+	createdAt: string;
+	updatedAt: string;
 }

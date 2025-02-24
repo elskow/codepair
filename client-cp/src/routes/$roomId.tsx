@@ -1,20 +1,20 @@
-import { Editor } from "@monaco-editor/react";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Camera, CameraOff, Mic, MicOff } from "lucide-react";
+import {Editor} from "@monaco-editor/react";
+import {createFileRoute, useNavigate} from "@tanstack/react-router";
+import {Camera, CameraOff, Mic, MicOff} from "lucide-react";
 import type React from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {useCallback, useEffect, useRef, useState} from "react";
 import Clock from "../components/rooms/Clock.tsx";
-import { RoomLayout } from "../components/rooms/RoomLayout.tsx";
+import {RoomLayout} from "../components/rooms/RoomLayout.tsx";
 import TabView from "../components/rooms/TabView.tsx";
 import VideoStream from "../components/rooms/VideoStream.tsx";
 import WriteSpace from "../components/rooms/WriteSpace.tsx";
-import { SUPPORTED_LANGUAGES } from "../config/languages";
-import { useAuth } from "../hooks/useAuth";
+import {SUPPORTED_LANGUAGES} from "../config/languages";
+import {useAuth} from "../hooks/useAuth";
 import useEditorPeer from "../hooks/useEditorPeer";
-import { useRooms } from "../hooks/useRooms";
+import {useRooms} from "../hooks/useRooms";
 import useWebRTC from "../hooks/useWebRTC";
-import { apiClient } from "../services/apiClient";
-import type { Room as RoomType } from "../types/auth";
+import {apiClient} from "../services/apiClient";
+import type {Room as RoomType} from "../types/auth";
 
 export const Route = createFileRoute("/$roomId")({
 	component: RoomComponent,
@@ -133,11 +133,14 @@ function RoomComponent() {
 			if (roomToken) {
 				// Case 2: Candidate with token - use joinRoom from useRooms hook
 				const response = await joinRoom(roomToken);
+				const now = new Date().toISOString();
 				setRoom({
 					id: response.roomId,
 					candidateName: response.candidateName,
 					isActive: response.isActive,
 					token: roomToken,
+					createdAt: response.createdAt || now,
+					updatedAt: response.updatedAt || now,
 				});
 				setIsCandidate(true);
 				return;
