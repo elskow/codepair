@@ -19,9 +19,15 @@ const PROGRAMMING_LANGUAGES = [
 	"Go",
 ] as const;
 
-const DUMMY_DATES = {
-	createdAt: new Date("2024-01-15T10:30:00"),
-	updatedAt: new Date("2024-01-16T15:45:00"),
+const formatDate = (dateString: string) => {
+	const date = new Date(dateString);
+	return date.toLocaleDateString("en-US", {
+		year: "numeric",
+		month: "short",
+		day: "numeric",
+		hour: "2-digit",
+		minute: "2-digit",
+	});
 };
 
 export function RoomSettingsModal({
@@ -33,11 +39,18 @@ export function RoomSettingsModal({
 	const [candidateName, setCandidateName] = useState(room.candidateName);
 	const [isActive, setIsActive] = useState(room.isActive);
 
-	const [scheduledTime, setScheduledTime] = useState<string>("");
-	const [duration, setDuration] = useState(60); // minutes
-
+	const [scheduledTime, setScheduledTime] = useState<string>(() => {
+		if (room.scheduledTime) {
+			const date = new Date(room.scheduledTime);
+			return new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+				.toISOString()
+				.slice(0, 16);
+		}
+		return "";
+	});
+	const [duration, setDuration] = useState(room.duration || 60);
 	const [programmingLanguages, setProgrammingLanguages] = useState<string[]>(
-		[],
+		room.technicalStack || [],
 	);
 	const [isDeleting, setIsDeleting] = useState(false);
 
@@ -52,17 +65,13 @@ export function RoomSettingsModal({
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		const formData: RoomSettings = {
-			candidateName,
 			isActive,
-			settings: {
-				interview: {
-					scheduledTime,
-					duration,
-				},
-				technical: {
-					languages: programmingLanguages,
-				},
-			},
+			candidateName,
+			scheduledTime: scheduledTime
+				? new Date(scheduledTime).toISOString()
+				: undefined,
+			duration,
+			technicalStack: programmingLanguages,
 		};
 		setPendingFormData(formData);
 		setShowSaveConfirmation(true);
@@ -127,32 +136,14 @@ export function RoomSettingsModal({
 							<div className="px-4 py-2 bg-[#161616] flex items-center space-x-6 text-xs">
 								<div className="flex items-center space-x-2">
 									<span className="text-[#8d8d8d]">Created:</span>
-									<time
-										dateTime={DUMMY_DATES.createdAt.toISOString()}
-										className="text-[#c6c6c6]"
-									>
-										{DUMMY_DATES.createdAt.toLocaleDateString("en-US", {
-											year: "numeric",
-											month: "short",
-											day: "numeric",
-											hour: "2-digit",
-											minute: "2-digit",
-										})}
+									<time dateTime={room.createdAt} className="text-[#c6c6c6]">
+										{formatDate(room.createdAt)}
 									</time>
 								</div>
 								<div className="flex items-center space-x-2">
 									<span className="text-[#8d8d8d]">Last modified:</span>
-									<time
-										dateTime={DUMMY_DATES.updatedAt.toISOString()}
-										className="text-[#c6c6c6]"
-									>
-										{DUMMY_DATES.updatedAt.toLocaleDateString("en-US", {
-											year: "numeric",
-											month: "short",
-											day: "numeric",
-											hour: "2-digit",
-											minute: "2-digit",
-										})}
+									<time dateTime={room.updatedAt} className="text-[#c6c6c6]">
+										{formatDate(room.updatedAt)}
 									</time>
 								</div>
 							</div>

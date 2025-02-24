@@ -27,20 +27,19 @@ export interface Room {
 		email: string;
 		name: string;
 	};
+	createdAt: string;
+	updatedAt: string;
+	scheduledTime?: string;
+	duration?: number;
+	technicalStack?: string[];
 }
 
 export interface RoomSettings {
-	candidateName: string;
 	isActive: boolean;
-	settings: {
-		interview: {
-			scheduledTime: string;
-			duration: number;
-		};
-		technical: {
-			languages: string[];
-		};
-	};
+	candidateName: string;
+	scheduledTime?: string;
+	duration?: number;
+	technicalStack?: string[];
 }
 
 export interface JoinRoomResponse {

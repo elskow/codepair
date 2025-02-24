@@ -1,14 +1,14 @@
-import { createLazyFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { CreateRoomForm } from "../components/index/CreateRoomForm";
-import { RoomList } from "../components/index/RoomList";
-import { RoomSearch } from "../components/index/RoomSearch";
-import { Header } from "../components/layout/Header";
-import { MobileMenu } from "../components/layout/MobileMenu";
-import { RoomSettingsModal } from "../components/index/RoomSettingsModal.tsx";
-import { useAuth } from "../hooks/useAuth";
-import { useRooms } from "../hooks/useRooms";
-import type { Room, RoomSettings } from "../types/auth";
+import {createLazyFileRoute, useNavigate} from "@tanstack/react-router";
+import {useEffect, useState} from "react";
+import {CreateRoomForm} from "../components/index/CreateRoomForm";
+import {RoomList} from "../components/index/RoomList";
+import {RoomSearch} from "../components/index/RoomSearch";
+import {RoomSettingsModal} from "../components/index/RoomSettingsModal.tsx";
+import {Header} from "../components/layout/Header";
+import {MobileMenu} from "../components/layout/MobileMenu";
+import {useAuth} from "../hooks/useAuth";
+import {useRooms} from "../hooks/useRooms";
+import type {Room, RoomSettings} from "../types/auth";
 
 export const Route = createLazyFileRoute("/")({
 	component: Index,
@@ -22,8 +22,14 @@ function Index() {
 	const [settingsRoom, setSettingsRoom] = useState<Room | null>(null);
 
 	const { isAuthenticated, isLoading: isLoadingAuth, user } = useAuth();
-	const { rooms, isLoading, createRoom, updateRoomSettings, refetchRooms } =
-		useRooms();
+	const {
+		rooms,
+		isLoading,
+		createRoom,
+		deleteRoom,
+		updateRoomSettings,
+		refetchRooms,
+	} = useRooms();
 
 	useEffect(() => {
 		if (!isLoadingAuth && !isAuthenticated) {
@@ -78,6 +84,15 @@ function Index() {
 		}
 	};
 
+	const handleDeleteRoom = async (roomId: string) => {
+		try {
+			await deleteRoom(roomId);
+			setSettingsRoom(null);
+		} catch (error) {
+			console.error("Failed to delete room:", error);
+		}
+	};
+
 	const filteredRooms = rooms.filter((room) =>
 		room.candidateName.toLowerCase().includes(searchQuery.toLowerCase()),
 	);
@@ -110,6 +125,7 @@ function Index() {
 					rooms={filteredRooms}
 					onCopyLink={handleCopyLink}
 					onSettingsClick={setSettingsRoom}
+					onJoinRoom={(room) => navigate({ to: `/${room.id}` })}
 				/>
 			</main>
 
@@ -118,6 +134,7 @@ function Index() {
 					room={settingsRoom}
 					onClose={() => setSettingsRoom(null)}
 					onUpdate={handleUpdateSettings}
+					onDelete={() => handleDeleteRoom(settingsRoom.id)}
 				/>
 			)}
 		</div>

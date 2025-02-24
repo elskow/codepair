@@ -1,39 +1,34 @@
-import { useNavigate } from "@tanstack/react-router";
-import type { Room } from "../../types/auth";
-import { RoomItem } from "./RoomItem.tsx";
+import type {Room} from "../../types/auth";
+import {RoomItem} from "./RoomItem.tsx";
 
 interface RoomListProps {
 	rooms: Room[];
-	onCopyLink: (room: Room) => void;
+	onCopyLink: (room: Room) => Promise<void>;
 	onSettingsClick: (room: Room) => void;
+	onJoinRoom?: (room: Room) => void;
 }
 
 export function RoomList({
 	rooms,
 	onCopyLink,
 	onSettingsClick,
+	onJoinRoom,
 }: RoomListProps) {
-	const navigate = useNavigate();
-
 	if (rooms.length === 0) {
 		return (
-			<div className="text-center py-8">
-				<p className="text-[#8d8d8d]">No rooms found</p>
-			</div>
+			<div className="text-center text-[#8d8d8d] py-8">No rooms found</div>
 		);
 	}
 
 	return (
-		<div className="grid gap-4">
+		<div className="space-y-4">
 			{rooms.map((room) => (
 				<RoomItem
 					key={room.id}
 					room={room}
 					onCopyLink={onCopyLink}
 					onSettingsClick={onSettingsClick}
-					onJoinRoom={() =>
-						navigate({ to: `/${room.id}`, search: { token: room.token } })
-					}
+					onJoinRoom={() => onJoinRoom?.(room)}
 				/>
 			))}
 		</div>
