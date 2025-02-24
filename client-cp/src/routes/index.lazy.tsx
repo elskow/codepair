@@ -5,7 +5,7 @@ import { RoomList } from "../components/index/RoomList";
 import { RoomSearch } from "../components/index/RoomSearch";
 import { Header } from "../components/layout/Header";
 import { MobileMenu } from "../components/layout/MobileMenu";
-import { RoomSettingsModal } from "../components/rooms/RoomSettingsModal.tsx";
+import { RoomSettingsModal } from "../components/index/RoomSettingsModal.tsx";
 import { useAuth } from "../hooks/useAuth";
 import { useRooms } from "../hooks/useRooms";
 import type { Room, RoomSettings } from "../types/auth";

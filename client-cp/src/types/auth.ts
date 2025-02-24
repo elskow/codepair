@@ -30,8 +30,17 @@ export interface Room {
 }
 
 export interface RoomSettings {
-	isActive?: boolean;
-	candidateName?: string;
+	candidateName: string;
+	isActive: boolean;
+	settings: {
+		interview: {
+			scheduledTime: string;
+			duration: number;
+		};
+		technical: {
+			languages: string[];
+		};
+	};
 }
 
 export interface JoinRoomResponse {
