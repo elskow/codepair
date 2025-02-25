@@ -278,8 +278,8 @@ function RoomComponent() {
 							</div>
 
 							{/* Chat/Log Section */}
-							<div className="flex-1 px-4 pb-4">
-								<TabView />
+							<div className="flex-1 px-4">
+								<TabView roomId={roomId} token={room?.token ?? null} />
 							</div>
 						</div>
 

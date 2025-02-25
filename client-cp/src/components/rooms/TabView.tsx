@@ -1,12 +1,18 @@
-import { useState } from "react";
+import {useState} from "react";
 import Chat from "./Chat.tsx";
 import Log from "./Log.tsx";
 
-const TabView = () => {
+interface TabViewProps {
+	roomId: string;
+	token: string | null;
+}
+
+const TabView = ({ roomId, token }: TabViewProps) => {
 	const [activeTab, setActiveTab] = useState<"chat" | "log">("chat");
 
 	return (
-		<div className="flex flex-col h-full bg-[#262626] rounded-lg overflow-hidden">
+		<div className="h-full flex flex-col bg-[#262626] rounded-lg overflow-hidden">
+			{/* Tab buttons */}
 			<div className="flex border-b border-[#393939]">
 				<button
 					type="button"
@@ -39,8 +45,13 @@ const TabView = () => {
 					Log
 				</button>
 			</div>
-			<div className="flex-1 overflow-hidden">
-				{activeTab === "chat" ? <Chat /> : <Log />}
+
+			<div className="flex-1 overflow-hidden relative">
+				{activeTab === "chat" ? (
+					<Chat roomId={roomId} token={token} />
+				) : (
+					<Log />
+				)}
 			</div>
 		</div>
 	);
