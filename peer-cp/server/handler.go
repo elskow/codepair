@@ -300,7 +300,8 @@ func (s *Server) HandleChatWS(c *websocket.Conn) {
 	}
 
 	client := &ChatClient{
-		conn: c,
+		conn:     c,
+		username: validRoom.CandidateName,
 	}
 
 	s.roomsMutex.Lock()
@@ -352,6 +353,13 @@ func (s *Server) HandleChatWS(c *websocket.Conn) {
 
 		switch event.Type {
 		case "chat":
+			if event.UserName == "" || event.UserName == "Anonymous" {
+				event.UserName = client.username
+				if event.UserName == "" {
+					event.UserName = "Anonymous"
+				}
+			}
+
 			message := ChatMessage{
 				ID:        fmt.Sprintf("%d", time.Now().UnixNano()),
 				RoomID:    roomID,

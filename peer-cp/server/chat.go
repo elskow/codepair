@@ -15,7 +15,8 @@ type ChatMessage struct {
 }
 
 type ChatClient struct {
-	conn *websocket.Conn
+	conn     *websocket.Conn
+	username string
 }
 
 type ChatEvent struct {
