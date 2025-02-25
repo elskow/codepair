@@ -46,14 +46,8 @@ func (s *Server) handleEditorMessage(ctx context.Context, c *websocket.Conn, roo
 			zap.String("roomID", roomID),
 			zap.Int("line", msg.Cursor.Line),
 			zap.Int("column", msg.Cursor.Column))
-
-	case "chat":
-		logger.Debug("Chat message received",
-			zap.String("roomID", roomID),
-			zap.String("message", msg.Chat))
 	}
 
-	// Broadcast message to all clients in room except sender
 	messageJSON, err := json.Marshal(msg)
 	if err != nil {
 		logger.Error("Failed to marshal message", zap.Error(err))

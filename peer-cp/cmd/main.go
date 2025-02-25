@@ -14,6 +14,7 @@ import (
 	"github.com/gofiber/contrib/fiberzap/v2"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/gofiber/websocket/v2"
 	"go.uber.org/zap"
 )
@@ -43,6 +44,8 @@ func main() {
 		AllowMethods: "GET, POST, PUT, DELETE, OPTIONS",
 	}))
 
+	app.Use(recover.New())
+
 	app.Use(fiberzap.New(fiberzap.Config{
 		Logger: logger,
 	}))
@@ -50,9 +53,11 @@ func main() {
 	srv := server.NewServer(app, logger, cfg)
 
 	app.Get("/editor/:roomId", websocket.New(srv.HandleEditorWS))
-	app.Get("/videochat/:roomId", websocket.New(srv.HandleVideoChatWS))
 	app.Use("/editor/*", middleware.UpgradeWebSocket)
+	app.Get("/videochat/:roomId", websocket.New(srv.HandleVideoChatWS))
 	app.Use("/videochat/*", middleware.UpgradeWebSocket)
+	app.Get("/chat/:roomId", websocket.New(srv.HandleChatWS))
+	app.Use("/chat/*", middleware.UpgradeWebSocket)
 
 	go func() {
 		logger.Info("Server starting", zap.String("address", cfg.Server.Address))

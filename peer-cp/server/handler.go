@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/gofiber/websocket/v2"
 	"github.com/pion/webrtc/v4"
@@ -37,11 +38,7 @@ func (s *Server) HandleEditorWS(c *websocket.Conn) {
 	s.roomsMutex.Lock()
 	localRoom, exists := s.rooms[roomID]
 	if !exists {
-		localRoom = &Room{
-			editorClients: make(map[*websocket.Conn]*EditorClient),
-			webrtcClients: make(map[*websocket.Conn]*WebRTCClient),
-			peerConns:     make(map[string]*webrtc.PeerConnection),
-		}
+		localRoom = newRoom()
 		s.rooms[roomID] = localRoom
 	}
 	s.roomsMutex.Unlock()
@@ -138,11 +135,7 @@ func (s *Server) HandleVideoChatWS(c *websocket.Conn) {
 	s.roomsMutex.Lock()
 	localRoom, exists := s.rooms[roomID]
 	if !exists {
-		localRoom = &Room{
-			editorClients: make(map[*websocket.Conn]*EditorClient),
-			webrtcClients: make(map[*websocket.Conn]*WebRTCClient),
-			peerConns:     make(map[string]*webrtc.PeerConnection),
-		}
+		localRoom = newRoom()
 		s.rooms[roomID] = localRoom
 	}
 	clientID := c.Query("clientId")
@@ -284,4 +277,127 @@ func (s *Server) HandleVideoChatWS(c *websocket.Conn) {
 		}
 	}
 	s.roomsMutex.Unlock()
+}
+
+func (s *Server) HandleChatWS(c *websocket.Conn) {
+	defer c.Close()
+
+	ctx := context.WithValue(context.Background(), "requestID", c.Params("requestId"))
+	logger := s.getLogger(ctx)
+
+	roomID := c.Params("roomId")
+	token := c.Query("token")
+
+	validRoom, err := s.validateRoom(roomID, token)
+	if err != nil {
+		logger.Error("Room validation failed", zap.Error(err))
+		return
+	}
+
+	if !validRoom.IsActive {
+		logger.Error("Room is not active")
+		return
+	}
+
+	client := &ChatClient{
+		conn: c,
+	}
+
+	s.roomsMutex.Lock()
+	localRoom, exists := s.rooms[roomID]
+	if !exists {
+		localRoom = newRoom()
+		s.rooms[roomID] = localRoom
+	}
+	s.roomsMutex.Unlock()
+
+	localRoom.clientsMutex.Lock()
+	localRoom.chatClients[c] = client
+	localRoom.clientsMutex.Unlock()
+
+	logger.Info("Chat client connected", zap.String("roomID", roomID))
+
+	// Send chat history to new client
+	if len(localRoom.chatMessages) > 0 {
+		historyEvent := ChatEvent{
+			Type: "history",
+			Message: ChatMessage{
+				Content: "Chat history",
+			},
+		}
+		if err := c.WriteJSON(historyEvent); err != nil {
+			logger.Error("Failed to send chat history", zap.Error(err))
+		}
+
+		for _, msg := range localRoom.chatMessages {
+			if err := c.WriteJSON(ChatEvent{
+				Type:    "chat",
+				Message: msg,
+			}); err != nil {
+				logger.Error("Failed to send chat message", zap.Error(err))
+			}
+		}
+	}
+
+	// Handle incoming messages
+	for {
+		var event ChatEvent
+		err := c.ReadJSON(&event)
+		if err != nil {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				logger.Error("WebSocket error", zap.Error(err))
+			}
+			break
+		}
+
+		switch event.Type {
+		case "chat":
+			message := ChatMessage{
+				ID:        fmt.Sprintf("%d", time.Now().UnixNano()),
+				RoomID:    roomID,
+				UserName:  event.UserName,
+				Content:   event.Content,
+				Timestamp: time.Now(),
+			}
+
+			localRoom.clientsMutex.Lock()
+			localRoom.chatMessages = append(localRoom.chatMessages, message)
+			localRoom.clientsMutex.Unlock()
+
+			// Broadcast to all clients in room
+			broadcastEvent := ChatEvent{
+				Type:    "chat",
+				Message: message,
+			}
+
+			messageJSON, err := json.Marshal(broadcastEvent)
+			if err != nil {
+				logger.Error("Failed to marshal chat message", zap.Error(err))
+				continue
+			}
+
+			localRoom.clientsMutex.RLock()
+			for client := range localRoom.chatClients {
+				err := client.WriteMessage(websocket.TextMessage, messageJSON)
+				if err != nil {
+					logger.Error("Failed to broadcast chat message", zap.Error(err))
+				}
+			}
+			localRoom.clientsMutex.RUnlock()
+		}
+	}
+
+	// Cleanup when client disconnects
+	localRoom.clientsMutex.Lock()
+	delete(localRoom.chatClients, c)
+	localRoom.clientsMutex.Unlock()
+
+	s.roomsMutex.Lock()
+	if len(localRoom.editorClients) == 0 && len(localRoom.webrtcClients) == 0 && len(localRoom.chatClients) == 0 {
+		delete(s.rooms, roomID)
+		logger.Info("Room closed", zap.String("roomID", roomID))
+	}
+	s.roomsMutex.Unlock()
+
+	logger.Info("Chat client disconnected", zap.String("roomID", roomID))
 }

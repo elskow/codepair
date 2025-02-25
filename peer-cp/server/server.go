@@ -23,9 +23,11 @@ type EditorClient struct {
 type Room struct {
 	editorClients map[*websocket.Conn]*EditorClient
 	webrtcClients map[*websocket.Conn]*WebRTCClient
+	chatClients   map[*websocket.Conn]*ChatClient
 	clientsMutex  sync.RWMutex
 	currentCode   string
 	language      string
+	chatMessages  []ChatMessage
 	peerConns     map[string]*webrtc.PeerConnection
 }
 
@@ -49,105 +51,6 @@ func NewServer(app *fiber.App, logger *zap.Logger, config config.Config) *Server
 
 	go server.cleanupInactiveClients()
 	return server
-}
-
-func (s *Server) validateRoom(roomID, token string) (*client.Room, error) {
-	if token == "" {
-		return nil, fmt.Errorf("token is required")
-	}
-
-	s.logger.Debug("Validating room",
-		zap.String("roomID", roomID),
-		zap.String("tokenPrefix", token[:10]))
-
-	room, err := s.coreClient.ValidateRoom(roomID, token)
-	if err != nil {
-		s.logger.Error("Room validation failed",
-			zap.String("roomID", roomID),
-			zap.Error(err))
-		return nil, fmt.Errorf("room validation failed: %w", err)
-	}
-
-	s.logger.Debug("Room validation result",
-		zap.String("roomID", roomID),
-		zap.Bool("isActive", room.IsActive),
-		zap.String("candidateName", room.CandidateName))
-
-	return room, nil
-}
-
-func (s *Server) cleanupInactiveClients() {
-	ticker := time.NewTicker(s.config.Server.CleanupInterval)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		s.roomsMutex.Lock()
-		for roomID, room := range s.rooms {
-			// Validate room is still active
-			validRoom, err := s.validateRoom(roomID, "") // We might want to store tokens per room
-			if err != nil || !validRoom.IsActive {
-				s.logger.Info("Room is no longer active, cleaning up",
-					zap.String("roomID", roomID),
-					zap.Error(err))
-
-				room.clientsMutex.Lock()
-				// Close all connections
-				for conn := range room.editorClients {
-					conn.Close()
-				}
-				for conn := range room.webrtcClients {
-					conn.Close()
-				}
-				for _, pc := range room.peerConns {
-					pc.Close()
-				}
-				room.clientsMutex.Unlock()
-
-				delete(s.rooms, roomID)
-				continue
-			}
-
-			room.clientsMutex.Lock()
-
-			// Check editor clients
-			for conn, client := range room.editorClients {
-				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-					s.logger.Warn("Inactive editor client detected",
-						zap.String("roomID", roomID),
-						zap.Error(err))
-					client.conn.Close()
-					delete(room.editorClients, conn)
-				}
-			}
-
-			// Check WebRTC clients
-			for conn, client := range room.webrtcClients {
-				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-					s.logger.Warn("Inactive WebRTC client detected",
-						zap.String("roomID", roomID),
-						zap.Error(err))
-					client.conn.Close()
-					delete(room.webrtcClients, conn)
-				}
-			}
-
-			// Cleanup peer connections
-			for id, pc := range room.peerConns {
-				if pc.ConnectionState() == webrtc.PeerConnectionStateClosed {
-					delete(room.peerConns, id)
-				}
-			}
-
-			// Remove empty room
-			if len(room.editorClients) == 0 && len(room.webrtcClients) == 0 {
-				s.logger.Info("Removing empty room", zap.String("roomID", roomID))
-				delete(s.rooms, roomID)
-			}
-
-			room.clientsMutex.Unlock()
-		}
-		s.roomsMutex.Unlock()
-	}
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
@@ -190,4 +93,102 @@ func (s *Server) getLogger(ctx context.Context) *zap.Logger {
 		return s.logger.With(zap.String("requestID", requestID))
 	}
 	return s.logger
+}
+
+func newRoom() *Room {
+	return &Room{
+		editorClients: make(map[*websocket.Conn]*EditorClient),
+		webrtcClients: make(map[*websocket.Conn]*WebRTCClient),
+		chatClients:   make(map[*websocket.Conn]*ChatClient),
+		chatMessages:  make([]ChatMessage, 0),
+		peerConns:     make(map[string]*webrtc.PeerConnection),
+	}
+}
+
+func (s *Server) validateRoom(roomID, token string) (*client.Room, error) {
+	if token == "" {
+		return nil, fmt.Errorf("token is required")
+	}
+
+	s.logger.Debug("Validating room",
+		zap.String("roomID", roomID),
+		zap.String("tokenPrefix", func() string {
+			if len(token) > 10 {
+				return token[:10]
+			}
+			return "token_too_short"
+		}()))
+
+	room, err := s.coreClient.ValidateRoom(roomID, token)
+	if err != nil {
+		s.logger.Error("Room validation failed",
+			zap.String("roomID", roomID),
+			zap.Error(err))
+		return nil, fmt.Errorf("room validation failed: %w", err)
+	}
+
+	s.logger.Debug("Room validation result",
+		zap.String("roomID", roomID),
+		zap.Bool("isActive", room.IsActive),
+		zap.String("candidateName", room.CandidateName))
+
+	return room, nil
+}
+
+func (s *Server) cleanupInactiveClients() {
+	ticker := time.NewTicker(s.config.Server.CleanupInterval)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		s.roomsMutex.Lock()
+		for roomID, room := range s.rooms {
+			room.clientsMutex.Lock()
+
+			for conn, editorClient := range room.editorClients {
+				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+					s.logger.Warn("Inactive editor client detected",
+						zap.String("roomID", roomID),
+						zap.Error(err))
+					editorClient.conn.Close()
+					delete(room.editorClients, conn)
+				}
+			}
+
+			for conn, rtcClient := range room.webrtcClients {
+				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+					s.logger.Warn("Inactive WebRTC client detected",
+						zap.String("roomID", roomID),
+						zap.Error(err))
+					rtcClient.conn.Close()
+					delete(room.webrtcClients, conn)
+				}
+			}
+
+			for conn, chatClient := range room.chatClients {
+				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+					s.logger.Warn("Inactive chat client detected",
+						zap.String("roomID", roomID),
+						zap.Error(err))
+					chatClient.conn.Close()
+					delete(room.chatClients, conn)
+				}
+			}
+
+			for id, pc := range room.peerConns {
+				if pc.ConnectionState() == webrtc.PeerConnectionStateClosed {
+					delete(room.peerConns, id)
+				}
+			}
+
+			if len(room.editorClients) == 0 &&
+				len(room.webrtcClients) == 0 &&
+				len(room.chatClients) == 0 {
+				s.logger.Info("Removing empty room", zap.String("roomID", roomID))
+				delete(s.rooms, roomID)
+			}
+
+			room.clientsMutex.Unlock()
+		}
+		s.roomsMutex.Unlock()
+	}
 }
