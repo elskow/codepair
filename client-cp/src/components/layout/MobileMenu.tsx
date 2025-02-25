@@ -1,8 +1,20 @@
-import { LogOut } from "lucide-react";
-import { useNavigate } from "@tanstack/react-router";
+import {useNavigate} from "@tanstack/react-router";
+import {LogOut} from "lucide-react";
+import {useToast} from "../../context/ToastContext.tsx";
 
 export function MobileMenu() {
 	const navigate = useNavigate();
+	const { show } = useToast();
+
+	const handleLogout = () => {
+		localStorage.removeItem("token");
+		show("auth", "error", {
+			title: "Logged out",
+			message: "You have been successfully logged out",
+			duration: 2000,
+		});
+		navigate({ to: "/login" });
+	};
 
 	return (
 		<div className="md:hidden bg-[#262626] border-b border-[#393939]">
@@ -22,7 +34,7 @@ export function MobileMenu() {
 				<div className="pt-2 border-t border-[#393939]">
 					<button
 						type="button"
-						onClick={() => navigate({ to: "/logout" })}
+						onClick={handleLogout}
 						className="text-sm text-[#fa4d56] hover:bg-[#353535] px-3 py-2 w-full text-left flex items-center gap-2"
 					>
 						<LogOut size={16} />

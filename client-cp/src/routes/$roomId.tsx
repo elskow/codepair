@@ -1,22 +1,22 @@
-import { Editor } from "@monaco-editor/react";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Camera, CameraOff, Mic, MicOff } from "lucide-react";
+import {Editor} from "@monaco-editor/react";
+import {createFileRoute, useNavigate} from "@tanstack/react-router";
+import {Camera, CameraOff, Mic, MicOff} from "lucide-react";
 import type React from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {useCallback, useEffect, useRef, useState} from "react";
 import Clock from "../components/rooms/Clock.tsx";
-import { RoomLayout } from "../components/rooms/RoomLayout.tsx";
+import {RoomLayout} from "../components/rooms/RoomLayout.tsx";
 import TabView from "../components/rooms/TabView.tsx";
 import VideoStream from "../components/rooms/VideoStream.tsx";
 import WriteSpace from "../components/rooms/WriteSpace.tsx";
-import { SUPPORTED_LANGUAGES } from "../config/languages";
-import { useAuth } from "../hooks/useAuth";
-import { useChat } from "../hooks/useChat.ts";
+import {SUPPORTED_LANGUAGES} from "../config/languages";
+import {useAuth} from "../hooks/useAuth";
+import {useChat} from "../hooks/useChat.ts";
 import useEditorPeer from "../hooks/useEditorPeer";
 import useNotesPeer from "../hooks/useNotesPeer.ts";
-import { useRooms } from "../hooks/useRooms";
+import {useRooms} from "../hooks/useRooms";
 import useWebRTC from "../hooks/useWebRTC";
-import { apiClient } from "../services/apiClient";
-import type { Room as RoomType } from "../types/auth";
+import {apiClient} from "../services/apiClient";
+import type {Room as RoomType} from "../types/auth";
 
 export const Route = createFileRoute("/$roomId")({
 	component: RoomComponent,
@@ -247,6 +247,8 @@ function RoomComponent() {
 		editorPeer.cleanup,
 		chatPeer.cleanup,
 		notesPeer.cleanup,
+		isAuthenticated,
+		roomId,
 	]);
 
 	// Check if the user is allowed to end the interview

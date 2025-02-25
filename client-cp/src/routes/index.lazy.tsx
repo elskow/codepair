@@ -1,14 +1,15 @@
-import { createLazyFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { CreateRoomForm } from "../components/index/CreateRoomForm";
-import { RoomList } from "../components/index/RoomList";
-import { RoomSearch } from "../components/index/RoomSearch";
-import { RoomSettingsModal } from "../components/index/RoomSettingsModal.tsx";
-import { Header } from "../components/layout/Header";
-import { MobileMenu } from "../components/layout/MobileMenu";
-import { useAuth } from "../hooks/useAuth";
-import { useRooms } from "../hooks/useRooms";
-import type { Room, RoomSettings } from "../types/auth";
+import {createLazyFileRoute, useNavigate} from "@tanstack/react-router";
+import {useEffect, useState} from "react";
+import {CreateRoomForm} from "../components/index/CreateRoomForm";
+import {RoomList} from "../components/index/RoomList";
+import {RoomSearch} from "../components/index/RoomSearch";
+import {RoomSettingsModal} from "../components/index/RoomSettingsModal.tsx";
+import {Header} from "../components/layout/Header";
+import {MobileMenu} from "../components/layout/MobileMenu";
+import {useToast} from "../context/ToastContext.tsx";
+import {useAuth} from "../hooks/useAuth";
+import {useRooms} from "../hooks/useRooms";
+import type {Room, RoomSettings} from "../types/auth";
 
 export const Route = createLazyFileRoute("/")({
 	component: Index,
@@ -16,6 +17,8 @@ export const Route = createLazyFileRoute("/")({
 
 function Index() {
 	const navigate = useNavigate();
+	const { show } = useToast();
+
 	const [candidateName, setCandidateName] = useState("");
 	const [searchQuery, setSearchQuery] = useState("");
 	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -64,8 +67,21 @@ function Index() {
 	const handleCreateRoom = async (e: React.FormEvent) => {
 		e.preventDefault();
 		if (candidateName.trim()) {
-			createRoom(candidateName);
-			setCandidateName("");
+			try {
+				await createRoom(candidateName);
+				setCandidateName("");
+				show("create", "success", {
+					title: "Room created",
+					message: `Interview room for ${candidateName} has been created`,
+					duration: 3000,
+				});
+			} catch (error) {
+				show("create", "error", {
+					title: "Creation failed",
+					message: "Failed to create the room. Please try again.",
+					duration: 4000,
+				});
+			}
 		}
 	};
 
@@ -73,10 +89,17 @@ function Index() {
 		const joinUrl = `${window.location.origin}/${room.id}?token=${room.token}`;
 		try {
 			await navigator.clipboard.writeText(joinUrl);
-			// TODO: Implement toast notification
-			console.log("Room link copied!");
+			show("copy", "info", {
+				title: "Link copied",
+				message: "Interview room link has been copied to clipboard",
+				duration: 2000,
+			});
 		} catch (error) {
-			console.error("Failed to copy link:", error);
+			show("copy", "error", {
+				title: "Copy failed",
+				message: "Could not copy the room link to clipboard",
+				duration: 4000,
+			});
 		}
 	};
 
@@ -84,13 +107,22 @@ function Index() {
 		if (!settingsRoom) return;
 
 		try {
-			updateRoomSettings({
+			await updateRoomSettings({
 				roomId: settingsRoom.id,
 				settings,
 			});
 			setSettingsRoom(null);
+			show("update", "warning", {
+				title: "Settings updated",
+				message: "Room settings have been successfully updated",
+				duration: 3000,
+			});
 		} catch (error) {
-			console.error("Failed to update room settings:", error);
+			show("update", "error", {
+				title: "Update failed",
+				message: "Failed to update room settings. Please try again.",
+				duration: 4000,
+			});
 		}
 	};
 
@@ -98,8 +130,25 @@ function Index() {
 		try {
 			await deleteRoom(roomId);
 			setSettingsRoom(null);
+			show("delete", "error", {
+				title: "Room deleted",
+				message: "The interview room has been successfully deleted",
+				duration: 3000,
+			});
 		} catch (error) {
-			console.error("Failed to delete room:", error);
+			if (error instanceof Error && error.message.includes("network")) {
+				show("network", "error", {
+					title: "Network Error",
+					message: "Please check your internet connection and try again.",
+					duration: 5000,
+				});
+			} else {
+				show("delete", "error", {
+					title: "Delete failed",
+					message: "Failed to delete the room. Please try again.",
+					duration: 4000,
+				});
+			}
 		}
 	};
 

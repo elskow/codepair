@@ -1,6 +1,7 @@
-import { LogOut, Menu, UserCircle, X } from "lucide-react";
-import { useNavigate } from "@tanstack/react-router";
-import type { User } from "../../types/auth";
+import {useNavigate} from "@tanstack/react-router";
+import {LogOut, Menu, UserCircle, X} from "lucide-react";
+import {useToast} from "../../context/ToastContext.tsx";
+import type {User} from "../../types/auth";
 
 interface HeaderProps {
 	user: User | undefined;
@@ -14,6 +15,17 @@ export function Header({
 	setIsMobileMenuOpen,
 }: HeaderProps) {
 	const navigate = useNavigate();
+	const { show } = useToast();
+
+	const handleLogout = () => {
+		localStorage.removeItem("token");
+		show("auth", "error", {
+			title: "Logged out",
+			message: "You have been successfully logged out",
+			duration: 2000,
+		});
+		navigate({ to: "/login" });
+	};
 
 	return (
 		<header className="h-12 bg-[#262626] border-b border-[#393939] flex items-center justify-between px-4">
@@ -42,7 +54,7 @@ export function Header({
 				</div>
 				<button
 					type="button"
-					onClick={() => navigate({ to: "/logout" })}
+					onClick={handleLogout}
 					className="hidden sm:flex items-center justify-center w-8 h-8 text-[#8d8d8d] hover:text-[#f4f4f4] hover:bg-[#353535] transition-colors"
 				>
 					<LogOut size={18} />

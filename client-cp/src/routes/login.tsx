@@ -1,13 +1,15 @@
+import {createFileRoute, useNavigate} from "@tanstack/react-router";
 import type React from "react";
-import { useState } from "react";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useAuth } from "../hooks/useAuth";
+import {useState} from "react";
+import {useToast} from "../context/ToastContext.tsx";
+import {useAuth} from "../hooks/useAuth";
 
 export const Route = createFileRoute("/login")({
 	component: LoginPage,
 });
 
 function LoginPage() {
+	const { show } = useToast();
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
 	const navigate = useNavigate();
@@ -20,6 +22,11 @@ function LoginPage() {
 			{
 				onSuccess: (data) => {
 					localStorage.setItem("token", data.token);
+					show("auth", "success", {
+						title: "Welcome back!",
+						message: "You have successfully logged in",
+						duration: 3000,
+					});
 					navigate({ to: "/" });
 				},
 			},
@@ -47,39 +54,11 @@ function LoginPage() {
 								value={email}
 								onChange={(e) => setEmail(e.target.value)}
 								placeholder=" "
-								className="
-									peer w-full h-[2.5rem]
-									bg-transparent text-[#f4f4f4]
-									border-0 border-b border-[#525252]
-									pt-4 px-0
-									text-sm
-									focus:outline-none focus:border-b-2 focus:border-[#0f62fe]
-									placeholder-transparent
-									transition-all
-									[-webkit-autofill:hover]:bg-transparent
-									[&:-webkit-autofill]:bg-transparent
-									[&:-webkit-autofill:hover]:bg-transparent
-									[&:-webkit-autofill:focus]:bg-transparent
-									[&:-webkit-autofill:active]:bg-transparent
-									[&:-webkit-autofill]:text-[#f4f4f4]
-									[&:-webkit-autofill]:[-webkit-text-fill-color:#f4f4f4]
-									[&:-webkit-autofill]:[-webkit-box-shadow:0_0_0px_1000px_#262626_inset]
-								"
+								className=" peer w-full h-[2.5rem] bg-transparent text-[#f4f4f4] border-0 border-b border-[#525252] pt-4 px-0 text-sm focus:outline-none focus:border-b-2 focus:border-[#f4f4f4] placeholder-transparent transition-all [-webkit-autofill:hover]:bg-transparent [&:-webkit-autofill]:bg-transparent [&:-webkit-autofill:hover]:bg-transparent [&:-webkit-autofill:focus]:bg-transparent [&:-webkit-autofill:active]:bg-transparent [&:-webkit-autofill]:text-[#f4f4f4] [&:-webkit-autofill]:[-webkit-text-fill-color:#f4f4f4] [&:-webkit-autofill]:[-webkit-box-shadow:0_0_0px_1000px_#262626_inset] hover:border-[#8d8d8d]"
 							/>
 							<label
 								htmlFor="email"
-								className="
-                                    absolute left-0
-                                    text-[#8d8d8d] text-xs
-                                    transition-all
-                                    peer-placeholder-shown:text-base
-                                    peer-placeholder-shown:text-[#8d8d8d]
-                                    peer-placeholder-shown:top-2
-                                    peer-focus:top-0
-                                    peer-focus:text-xs
-                                    peer-focus:text-[#0f62fe]
-                                    top-0
-                                "
+								className=" absolute left-0 text-[#8d8d8d] text-xs transition-all peer-placeholder-shown:text-base peer-placeholder-shown:text-[#8d8d8d] peer-placeholder-shown:top-2 peer-focus:top-0 peer-focus:text-xs peer-focus:text-[#f4f4f4] top-0"
 							>
 								Email
 							</label>
@@ -92,39 +71,11 @@ function LoginPage() {
 								value={password}
 								onChange={(e) => setPassword(e.target.value)}
 								placeholder=" "
-								className="
-									peer w-full h-[2.5rem]
-									bg-transparent text-[#f4f4f4]
-									border-0 border-b border-[#525252]
-									pt-4 px-0
-									text-sm
-									focus:outline-none focus:border-b-2 focus:border-[#0f62fe]
-									placeholder-transparent
-									transition-all
-									[-webkit-autofill:hover]:bg-transparent
-									[&:-webkit-autofill]:bg-transparent
-									[&:-webkit-autofill:hover]:bg-transparent
-									[&:-webkit-autofill:focus]:bg-transparent
-									[&:-webkit-autofill:active]:bg-transparent
-									[&:-webkit-autofill]:text-[#f4f4f4]
-									[&:-webkit-autofill]:[-webkit-text-fill-color:#f4f4f4]
-									[&:-webkit-autofill]:[-webkit-box-shadow:0_0_0px_1000px_#262626_inset]
-								"
+								className=" peer w-full h-[2.5rem] bg-transparent text-[#f4f4f4] border-0 border-b border-[#525252] pt-4 px-0 text-sm focus:outline-none focus:border-b-2 focus:border-[#f4f4f4] placeholder-transparent transition-all [-webkit-autofill:hover]:bg-transparent [&:-webkit-autofill]:bg-transparent [&:-webkit-autofill:hover]:bg-transparent [&:-webkit-autofill:focus]:bg-transparent [&:-webkit-autofill:active]:bg-transparent [&:-webkit-autofill]:text-[#f4f4f4] [&:-webkit-autofill]:[-webkit-text-fill-color:#f4f4f4] [&:-webkit-autofill]:[-webkit-box-shadow:0_0_0px_1000px_#262626_inset] hover:border-[#8d8d8d]"
 							/>
 							<label
 								htmlFor="password"
-								className="
-                                    absolute left-0
-                                    text-[#8d8d8d] text-xs
-                                    transition-all
-                                    peer-placeholder-shown:text-base
-                                    peer-placeholder-shown:text-[#8d8d8d]
-                                    peer-placeholder-shown:top-2
-                                    peer-focus:top-0
-                                    peer-focus:text-xs
-                                    peer-focus:text-[#0f62fe]
-                                    top-0
-                                "
+								className=" absolute left-0 text-[#8d8d8d] text-xs transition-all peer-placeholder-shown:text-base peer-placeholder-shown:text-[#8d8d8d] peer-placeholder-shown:top-2 peer-focus:top-0 peer-focus:text-xs peer-focus:text-[#f4f4f4] top-0"
 							>
 								Password
 							</label>
@@ -139,15 +90,7 @@ function LoginPage() {
 						<button
 							type="submit"
 							disabled={login.isPending}
-							className="
-                                w-full h-[3rem]
-                                bg-[#0f62fe] text-white
-                                hover:bg-[#0353e9]
-                                focus:outline-[#ffffff] focus:outline-2
-                                disabled:bg-[#8d8d8d] disabled:cursor-not-allowed
-                                text-sm font-normal
-                                transition-colors
-                            "
+							className=" w-full h-[3rem] bg-[#0f62fe] text-white hover:bg-[#0353e9] focus:outline-[#ffffff] focus:outline-2 disabled:bg-[#8d8d8d] disabled:cursor-not-allowed text-sm font-normal transition-colors           "
 						>
 							{login.isPending ? "Signing in..." : "Sign in"}
 						</button>
