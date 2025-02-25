@@ -20,8 +20,9 @@ type ChatClient struct {
 }
 
 type ChatEvent struct {
-	Type     string      `json:"type"`
-	UserName string      `json:"userName"`
-	Content  string      `json:"content,omitempty"`
-	Message  ChatMessage `json:"message,omitempty"`
+	Type     string        `json:"type"`
+	UserName string        `json:"userName"`
+	Content  string        `json:"content,omitempty"`
+	Message  ChatMessage   `json:"message,omitempty"`
+	Messages []ChatMessage `json:"messages,omitempty"`
 }

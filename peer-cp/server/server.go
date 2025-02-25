@@ -14,6 +14,10 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	MaxChatHistory = 1000 // Maximum number of chat messages to keep in memory per room
+)
+
 // EditorClient represents a client connected to the editor
 type EditorClient struct {
 	conn *websocket.Conn
@@ -143,47 +147,62 @@ func (s *Server) cleanupInactiveClients() {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		s.roomsMutex.Lock()
-		for roomID, room := range s.rooms {
+		s.roomsMutex.RLock()
+		if len(s.rooms) == 0 {
+			s.roomsMutex.RUnlock()
+			continue // Skip if no rooms
+		}
+
+		roomsToProcess := make([]struct {
+			id   string
+			room *Room
+		}, 0, len(s.rooms))
+
+		for id, room := range s.rooms {
+			roomsToProcess = append(roomsToProcess, struct {
+				id   string
+				room *Room
+			}{id, room})
+		}
+		s.roomsMutex.RUnlock()
+
+		emptyRooms := make([]string, 0)
+		for _, rp := range roomsToProcess {
+			room := rp.room
+			roomID := rp.id
+
 			room.clientsMutex.Lock()
 
-			for conn, editorClient := range room.editorClients {
-				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-					s.logger.Warn("Inactive editor client detected",
-						zap.String("roomID", roomID),
-						zap.Error(err))
-					editorClient.conn.Close()
-					delete(room.editorClients, conn)
-				}
+			allClients := make([]*websocket.Conn, 0)
+			for conn := range room.editorClients {
+				allClients = append(allClients, conn)
+			}
+			for conn := range room.webrtcClients {
+				allClients = append(allClients, conn)
+			}
+			for conn := range room.chatClients {
+				allClients = append(allClients, conn)
+			}
+			for conn := range room.notesClients {
+				allClients = append(allClients, conn)
 			}
 
-			for conn, rtcClient := range room.webrtcClients {
+			for _, conn := range allClients {
 				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-					s.logger.Warn("Inactive WebRTC client detected",
-						zap.String("roomID", roomID),
-						zap.Error(err))
-					rtcClient.conn.Close()
-					delete(room.webrtcClients, conn)
-				}
-			}
-
-			for conn, chatClient := range room.chatClients {
-				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-					s.logger.Warn("Inactive chat client detected",
-						zap.String("roomID", roomID),
-						zap.Error(err))
-					chatClient.conn.Close()
-					delete(room.chatClients, conn)
-				}
-			}
-
-			for conn, notesClient := range room.notesClients {
-				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-					s.logger.Warn("Inactive notes client detected",
-						zap.String("roomID", roomID),
-						zap.Error(err))
-					notesClient.conn.Close()
-					delete(room.notesClients, conn)
+					if _, ok := room.editorClients[conn]; ok {
+						delete(room.editorClients, conn)
+					}
+					if client, ok := room.webrtcClients[conn]; ok {
+						client.cancel() // Cancel WebRTC context
+						delete(room.webrtcClients, conn)
+					}
+					if _, ok := room.chatClients[conn]; ok {
+						delete(room.chatClients, conn)
+					}
+					if _, ok := room.notesClients[conn]; ok {
+						delete(room.notesClients, conn)
+					}
+					conn.Close()
 				}
 			}
 
@@ -195,13 +214,21 @@ func (s *Server) cleanupInactiveClients() {
 
 			if len(room.editorClients) == 0 &&
 				len(room.webrtcClients) == 0 &&
-				len(room.chatClients) == 0 {
-				s.logger.Info("Removing empty room", zap.String("roomID", roomID))
-				delete(s.rooms, roomID)
+				len(room.chatClients) == 0 &&
+				len(room.notesClients) == 0 {
+				emptyRooms = append(emptyRooms, roomID)
 			}
 
 			room.clientsMutex.Unlock()
 		}
-		s.roomsMutex.Unlock()
+
+		if len(emptyRooms) > 0 {
+			s.roomsMutex.Lock()
+			for _, roomID := range emptyRooms {
+				delete(s.rooms, roomID)
+				s.logger.Info("Removed empty room", zap.String("roomID", roomID))
+			}
+			s.roomsMutex.Unlock()
+		}
 	}
 }

@@ -17,6 +17,8 @@ type WebRTCClient struct {
 	pc         *webrtc.PeerConnection
 	writeMutex sync.Mutex
 	candidates []webrtc.ICECandidateInit
+	ctx        context.Context
+	cancel     context.CancelFunc
 }
 
 func (s *Server) createPeerConnection() (*webrtc.PeerConnection, error) {

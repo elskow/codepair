@@ -119,11 +119,14 @@ func (s *Server) HandleVideoChatWS(c *websocket.Conn) {
 		return
 	}
 
-	// Create WebRTC client
+	ctx, cancel := context.WithCancel(ctx)
 	client := &WebRTCClient{
 		conn:       c,
 		candidates: make([]webrtc.ICECandidateInit, 0),
+		ctx:        ctx,
+		cancel:     cancel,
 	}
+	defer cancel()
 
 	pc, err := s.createPeerConnection()
 	if err != nil {
@@ -188,35 +191,45 @@ func (s *Server) HandleVideoChatWS(c *websocket.Conn) {
 						continue
 					}
 
-					go func() {
+					go func(ctx context.Context) {
 						rtcpBuf := make([]byte, 1500)
 						for {
-							if _, _, rtcpErr := sender.Read(rtcpBuf); rtcpErr != nil {
+							select {
+							case <-ctx.Done():
 								return
+							default:
+								if _, _, rtcpErr := sender.Read(rtcpBuf); rtcpErr != nil {
+									return
+								}
 							}
 						}
-					}()
+					}(client.ctx)
 				}
 			}
 		}
 		s.roomsMutex.RUnlock()
 
 		// Read incoming track data and forward it
-		go func() {
+		go func(ctx context.Context) {
 			rtpBuf := make([]byte, 1500)
 			for {
-				n, _, err := track.Read(rtpBuf)
-				if err != nil {
-					s.logger.Error("Failed to read from track", zap.Error(err))
+				select {
+				case <-ctx.Done():
 					return
-				}
+				default:
+					n, _, err := track.Read(rtpBuf)
+					if err != nil {
+						s.logger.Error("Failed to read from track", zap.Error(err))
+						return
+					}
 
-				if _, err = localTrack.Write(rtpBuf[:n]); err != nil {
-					s.logger.Error("Failed to write to local track", zap.Error(err))
-					return
+					if _, err = localTrack.Write(rtpBuf[:n]); err != nil {
+						s.logger.Error("Failed to write to local track", zap.Error(err))
+						return
+					}
 				}
 			}
-		}()
+		}(client.ctx)
 	})
 
 	// State change handling
@@ -270,6 +283,9 @@ func (s *Server) HandleVideoChatWS(c *websocket.Conn) {
 	// Cleanup
 	s.roomsMutex.Lock()
 	if localRoom, exists := s.rooms[roomID]; exists {
+		if client, ok := localRoom.webrtcClients[c]; ok {
+			client.cancel()
+		}
 		delete(localRoom.webrtcClients, c)
 		delete(localRoom.peerConns, clientID)
 		if len(localRoom.editorClients) == 0 && len(localRoom.webrtcClients) == 0 {
@@ -321,22 +337,11 @@ func (s *Server) HandleChatWS(c *websocket.Conn) {
 	// Send chat history to new client
 	if len(localRoom.chatMessages) > 0 {
 		historyEvent := ChatEvent{
-			Type: "history",
-			Message: ChatMessage{
-				Content: "Chat history",
-			},
+			Type:     "history",
+			Messages: localRoom.chatMessages,
 		}
 		if err := c.WriteJSON(historyEvent); err != nil {
 			logger.Error("Failed to send chat history", zap.Error(err))
-		}
-
-		for _, msg := range localRoom.chatMessages {
-			if err := c.WriteJSON(ChatEvent{
-				Type:    "chat",
-				Message: msg,
-			}); err != nil {
-				logger.Error("Failed to send chat message", zap.Error(err))
-			}
 		}
 	}
 
@@ -368,11 +373,6 @@ func (s *Server) HandleChatWS(c *websocket.Conn) {
 				Timestamp: time.Now(),
 			}
 
-			localRoom.clientsMutex.Lock()
-			localRoom.chatMessages = append(localRoom.chatMessages, message)
-			localRoom.clientsMutex.Unlock()
-
-			// Broadcast to all clients in room
 			broadcastEvent := ChatEvent{
 				Type:    "chat",
 				Message: message,
@@ -384,14 +384,20 @@ func (s *Server) HandleChatWS(c *websocket.Conn) {
 				continue
 			}
 
-			localRoom.clientsMutex.RLock()
+			localRoom.clientsMutex.Lock()
+			if len(localRoom.chatMessages) >= MaxChatHistory {
+				localRoom.chatMessages = localRoom.chatMessages[1:]
+			}
+			localRoom.chatMessages = append(localRoom.chatMessages, message)
+
 			for client := range localRoom.chatClients {
-				err := client.WriteMessage(websocket.TextMessage, messageJSON)
-				if err != nil {
-					logger.Error("Failed to broadcast chat message", zap.Error(err))
+				if err := client.WriteMessage(websocket.TextMessage, messageJSON); err != nil {
+					logger.Error("Failed to broadcast chat message",
+						zap.Error(err),
+						zap.String("roomID", roomID))
 				}
 			}
-			localRoom.clientsMutex.RUnlock()
+			localRoom.clientsMutex.Unlock()
 		}
 	}
 
