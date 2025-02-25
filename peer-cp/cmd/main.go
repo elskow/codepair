@@ -58,6 +58,8 @@ func main() {
 	app.Use("/videochat/*", middleware.UpgradeWebSocket)
 	app.Get("/chat/:roomId", websocket.New(srv.HandleChatWS))
 	app.Use("/chat/*", middleware.UpgradeWebSocket)
+	app.Get("/notes/:roomId", websocket.New(srv.HandleNotesWS))
+	app.Use("/notes/*", middleware.UpgradeWebSocket)
 
 	go func() {
 		logger.Info("Server starting", zap.String("address", cfg.Server.Address))

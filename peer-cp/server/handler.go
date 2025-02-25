@@ -401,3 +401,84 @@ func (s *Server) HandleChatWS(c *websocket.Conn) {
 
 	logger.Info("Chat client disconnected", zap.String("roomID", roomID))
 }
+
+func (s *Server) HandleNotesWS(c *websocket.Conn) {
+	defer c.Close()
+
+	ctx := context.WithValue(context.Background(), "requestID", c.Params("requestId"))
+	logger := s.getLogger(ctx)
+
+	roomID := c.Params("roomId")
+	token := c.Query("token")
+
+	validRoom, err := s.validateRoom(roomID, token)
+	if err != nil {
+		logger.Error("Room validation failed", zap.Error(err))
+		return
+	}
+
+	if !validRoom.IsActive {
+		logger.Error("Room is not active")
+		return
+	}
+
+	client := &NotesClient{
+		conn: c,
+	}
+
+	s.roomsMutex.Lock()
+	localRoom, exists := s.rooms[roomID]
+	if !exists {
+		localRoom = newRoom()
+		s.rooms[roomID] = localRoom
+	}
+	s.roomsMutex.Unlock()
+
+	localRoom.clientsMutex.Lock()
+	localRoom.notesClients[c] = client
+	localRoom.clientsMutex.Unlock()
+
+	logger.Info("Notes client connected", zap.String("roomID", roomID))
+
+	// Send current notes state to new client
+	if localRoom.currentNotes != "" {
+		syncMessage := NotesMessage{
+			Type:    "sync",
+			Content: localRoom.currentNotes,
+		}
+		if err := c.WriteJSON(syncMessage); err != nil {
+			logger.Error("Failed to send notes sync message", zap.Error(err))
+		}
+	}
+
+	// Handle incoming messages
+	for {
+		var msg NotesMessage
+		err := c.ReadJSON(&msg)
+		if err != nil {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				logger.Error("WebSocket error", zap.Error(err))
+			}
+			break
+		}
+
+		s.handleNotesMessage(ctx, c, roomID, msg)
+	}
+
+	// Cleanup when client disconnects
+	localRoom.clientsMutex.Lock()
+	delete(localRoom.notesClients, c)
+	localRoom.clientsMutex.Unlock()
+
+	s.roomsMutex.Lock()
+	if len(localRoom.editorClients) == 0 &&
+		len(localRoom.webrtcClients) == 0 &&
+		len(localRoom.chatClients) == 0 &&
+		len(localRoom.notesClients) == 0 {
+		delete(s.rooms, roomID)
+		logger.Info("Room closed", zap.String("roomID", roomID))
+	}
+	s.roomsMutex.Unlock()
+
+	logger.Info("Notes client disconnected", zap.String("roomID", roomID))
+}

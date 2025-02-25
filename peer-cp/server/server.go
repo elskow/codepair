@@ -24,10 +24,12 @@ type Room struct {
 	editorClients map[*websocket.Conn]*EditorClient
 	webrtcClients map[*websocket.Conn]*WebRTCClient
 	chatClients   map[*websocket.Conn]*ChatClient
+	notesClients  map[*websocket.Conn]*NotesClient
 	clientsMutex  sync.RWMutex
 	currentCode   string
 	language      string
 	chatMessages  []ChatMessage
+	currentNotes  string
 	peerConns     map[string]*webrtc.PeerConnection
 }
 
@@ -100,6 +102,7 @@ func newRoom() *Room {
 		editorClients: make(map[*websocket.Conn]*EditorClient),
 		webrtcClients: make(map[*websocket.Conn]*WebRTCClient),
 		chatClients:   make(map[*websocket.Conn]*ChatClient),
+		notesClients:  make(map[*websocket.Conn]*NotesClient),
 		chatMessages:  make([]ChatMessage, 0),
 		peerConns:     make(map[string]*webrtc.PeerConnection),
 	}
@@ -171,6 +174,16 @@ func (s *Server) cleanupInactiveClients() {
 						zap.Error(err))
 					chatClient.conn.Close()
 					delete(room.chatClients, conn)
+				}
+			}
+
+			for conn, notesClient := range room.notesClients {
+				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+					s.logger.Warn("Inactive notes client detected",
+						zap.String("roomID", roomID),
+						zap.Error(err))
+					notesClient.conn.Close()
+					delete(room.notesClients, conn)
 				}
 			}
 
