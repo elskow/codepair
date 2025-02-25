@@ -1,13 +1,18 @@
-import {useState} from "react";
+import { useState } from "react";
 import Chat from "./Chat.tsx";
 import Log from "./Log.tsx";
+import type { ChatMessage } from "../../types/chat.ts";
 
 interface TabViewProps {
-	roomId: string;
-	token: string | null;
+	chatState: {
+		messages: ChatMessage[];
+		isLoading: boolean;
+		error: Error | null;
+		sendMessage: (content: string) => void;
+	};
 }
 
-const TabView = ({ roomId, token }: TabViewProps) => {
+const TabView = ({ chatState }: TabViewProps) => {
 	const [activeTab, setActiveTab] = useState<"chat" | "log">("chat");
 
 	return (
@@ -47,11 +52,7 @@ const TabView = ({ roomId, token }: TabViewProps) => {
 			</div>
 
 			<div className="flex-1 overflow-hidden relative">
-				{activeTab === "chat" ? (
-					<Chat roomId={roomId} token={token} />
-				) : (
-					<Log />
-				)}
+				{activeTab === "chat" ? <Chat chatState={chatState} /> : <Log />}
 			</div>
 		</div>
 	);

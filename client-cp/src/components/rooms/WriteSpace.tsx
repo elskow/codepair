@@ -1,21 +1,21 @@
 import Code from "@tiptap/extension-code";
 import CodeBlock from "@tiptap/extension-code-block";
 import Placeholder from "@tiptap/extension-placeholder";
-import {EditorContent, useEditor} from "@tiptap/react";
+import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import {Bold, Code as CodeIcon, Italic, List, Quote} from "lucide-react";
+import { Bold, Code as CodeIcon, Italic, List, Quote } from "lucide-react";
 import type React from "react";
-import {useEffect, useRef} from "react";
-import useNotesPeer from "../../hooks/useNotesPeer";
+import { useEffect, useRef } from "react";
 
 interface WriteSpaceProps {
-	roomId: string;
-	token: string | null;
+	notesState: {
+		content: string;
+		handleContentChange: (text: string, html: string) => void;
+	};
 }
 
-const WriteSpace = ({ roomId, token }: WriteSpaceProps) => {
-	const url = import.meta.env.VITE_WS_URL || "ws://localhost:8001";
-	const { content, handleContentChange } = useNotesPeer(url, roomId, token);
+const WriteSpace = ({ notesState }: WriteSpaceProps) => {
+	const { content, handleContentChange } = notesState;
 	const isLocalUpdate = useRef(false);
 
 	const editor = useEditor({

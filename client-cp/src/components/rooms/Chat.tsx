@@ -1,28 +1,25 @@
-import {formatDistance} from "date-fns";
-import {Loader} from "lucide-react";
+import { formatDistance } from "date-fns";
+import { Loader } from "lucide-react";
 import type React from "react";
-import {useCallback, useEffect, useRef, useState} from "react";
-import {useAuth} from "../../hooks/useAuth";
-import {useChat} from "../../hooks/useChat";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useAuth } from "../../hooks/useAuth";
+import type { ChatMessage } from "../../types/chat.ts";
 
 interface ChatProps {
-	roomId: string;
-	token: string | null;
+	chatState: {
+		messages: ChatMessage[];
+		isLoading: boolean;
+		error: Error | null;
+		sendMessage: (content: string) => void;
+	};
 }
 
-const Chat = ({ roomId, token }: ChatProps) => {
+const Chat = ({ chatState }: ChatProps) => {
 	const { user } = useAuth();
 	const messagesEndRef = useRef<HTMLDivElement>(null);
 	const inputRef = useRef<HTMLInputElement>(null);
 	const [newMessage, setNewMessage] = useState("");
-
-	const url = import.meta.env.VITE_WS_URL || "ws://localhost:8001";
-	const { messages, isLoading, error, sendMessage } = useChat(
-		url,
-		roomId,
-		token,
-		user?.name || "Anonymous",
-	);
+	const { messages, isLoading, error, sendMessage } = chatState;
 
 	const scrollToBottom = useCallback(() => {
 		messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });

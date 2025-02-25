@@ -16,6 +16,7 @@ interface WebRTCHook {
 	remoteStream: MediaStream | null;
 	toggleWebcam: () => void;
 	toggleMicrophone: () => void;
+	cleanup: () => void;
 }
 
 const useWebRTC = (
@@ -266,7 +267,6 @@ const useWebRTC = (
 
 			socket.onopen = () => {
 				if (isComponentMounted.current) {
-					console.log("WebSocket Connected");
 					updateConnectionState("WebSocket Connected");
 					reconnectAttempts.current = 0;
 					isConnecting.current = false;
@@ -276,7 +276,6 @@ const useWebRTC = (
 
 			socket.onclose = (event) => {
 				if (isComponentMounted.current) {
-					console.log("WebSocket Closed:", event.code, event.reason);
 					updateConnectionState("WebSocket Disconnected");
 					isConnecting.current = false;
 
@@ -333,6 +332,26 @@ const useWebRTC = (
 		});
 	}, [localStream]);
 
+	const cleanup = useCallback(() => {
+		isComponentMounted.current = false;
+		isConnecting.current = false;
+
+		cleanupWebSocket();
+
+		if (peerConnection.current) {
+			peerConnection.current.close();
+			peerConnection.current = null;
+		}
+
+		if (localStreamRef.current) {
+			localStreamRef.current.getTracks().forEach((track) => track.stop());
+			localStreamRef.current = null;
+		}
+
+		setLocalStream(null);
+		setRemoteStream(null);
+	}, [cleanupWebSocket]);
+
 	// Initialization and cleanup
 	useEffect(() => {
 		if (!url) return;
@@ -383,6 +402,7 @@ const useWebRTC = (
 		remoteStream,
 		toggleWebcam,
 		toggleMicrophone,
+		cleanup,
 	};
 };
 

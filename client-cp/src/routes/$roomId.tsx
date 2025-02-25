@@ -1,20 +1,22 @@
-import {Editor} from "@monaco-editor/react";
-import {createFileRoute, useNavigate} from "@tanstack/react-router";
-import {Camera, CameraOff, Mic, MicOff} from "lucide-react";
+import { Editor } from "@monaco-editor/react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Camera, CameraOff, Mic, MicOff } from "lucide-react";
 import type React from "react";
-import {useCallback, useEffect, useRef, useState} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Clock from "../components/rooms/Clock.tsx";
-import {RoomLayout} from "../components/rooms/RoomLayout.tsx";
+import { RoomLayout } from "../components/rooms/RoomLayout.tsx";
 import TabView from "../components/rooms/TabView.tsx";
 import VideoStream from "../components/rooms/VideoStream.tsx";
 import WriteSpace from "../components/rooms/WriteSpace.tsx";
-import {SUPPORTED_LANGUAGES} from "../config/languages";
-import {useAuth} from "../hooks/useAuth";
+import { SUPPORTED_LANGUAGES } from "../config/languages";
+import { useAuth } from "../hooks/useAuth";
+import { useChat } from "../hooks/useChat.ts";
 import useEditorPeer from "../hooks/useEditorPeer";
-import {useRooms} from "../hooks/useRooms";
+import useNotesPeer from "../hooks/useNotesPeer.ts";
+import { useRooms } from "../hooks/useRooms";
 import useWebRTC from "../hooks/useWebRTC";
-import {apiClient} from "../services/apiClient";
-import type {Room as RoomType} from "../types/auth";
+import { apiClient } from "../services/apiClient";
+import type { Room as RoomType } from "../types/auth";
 
 export const Route = createFileRoute("/$roomId")({
 	component: RoomComponent,
@@ -28,7 +30,7 @@ function RoomComponent() {
 	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState<Error | null>(null);
 	const navigate = useNavigate();
-	const { isAuthenticated } = useAuth();
+	const { isAuthenticated, user } = useAuth();
 	const { joinRoom, endRoom } = useRooms();
 	const [isCandidate, setIsCandidate] = useState(false);
 
@@ -40,6 +42,19 @@ function RoomComponent() {
 
 	const editorPeer = useEditorPeer(
 		room?.isActive ? `${URL}/editor` : null,
+		roomId,
+		room?.isActive ? room.token : null,
+	);
+
+	const chatPeer = useChat(
+		room?.isActive ? `${URL}/chat` : null,
+		roomId,
+		room?.isActive ? room.token : null,
+		user?.name || "Anonymous",
+	);
+
+	const notesPeer = useNotesPeer(
+		room?.isActive ? `${URL}/notes` : null,
 		roomId,
 		room?.isActive ? room.token : null,
 	);
@@ -171,6 +186,15 @@ function RoomComponent() {
 		if (!room) return;
 		try {
 			endRoom(room.id);
+
+			// Clean up all WebSocket connections
+			webRTC.cleanup();
+			editorPeer.cleanup();
+			chatPeer.cleanup();
+			notesPeer.cleanup();
+
+			setRoom(null);
+			localStorage.removeItem("lastVisitedRoom");
 			await navigate({ to: "/" });
 		} catch (error) {
 			console.error("Failed to end interview:", error);
@@ -208,14 +232,22 @@ function RoomComponent() {
 		if (room?.isActive && isAuthenticated) {
 			localStorage.setItem("lastVisitedRoom", roomId);
 		}
-
 		return () => {
-			// Clean up when leaving the room
 			if (!room?.isActive) {
 				localStorage.removeItem("lastVisitedRoom");
+				webRTC.cleanup();
+				editorPeer.cleanup();
+				chatPeer.cleanup();
+				notesPeer.cleanup();
 			}
 		};
-	}, [room?.isActive, roomId, isAuthenticated]);
+	}, [
+		room?.isActive,
+		webRTC.cleanup,
+		editorPeer.cleanup,
+		chatPeer.cleanup,
+		notesPeer.cleanup,
+	]);
 
 	// Check if the user is allowed to end the interview
 	const showEndButton = !isCandidate && isAuthenticated && room?.isActive;
@@ -310,7 +342,7 @@ function RoomComponent() {
 
 							{/* Chat/Log Section */}
 							<div className="flex-1 px-4">
-								<TabView roomId={roomId} token={room?.token ?? null} />
+								<TabView chatState={chatPeer} />
 							</div>
 						</div>
 
@@ -341,8 +373,7 @@ function RoomComponent() {
 							style={{ width: isMobile ? "100%" : `${100 - editorWidth}%` }}
 							className={`relative min-w-[30%] ${isMobile ? "h-1/2" : "h-full"} border-b md:border-b-0 md:border-r border-[#393939] bg-[#161616]`}
 						>
-							<WriteSpace roomId={roomId} token={room?.token ?? null} />
-
+							<WriteSpace notesState={notesPeer} />
 							{/* Resizer */}
 							{!isMobile && (
 								<div

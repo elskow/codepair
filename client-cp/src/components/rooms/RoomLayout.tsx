@@ -1,5 +1,5 @@
 import { Loader } from "lucide-react";
-import type { ReactNode } from "react";
+import { ReactNode, useEffect } from "react";
 import type { Room } from "../../types/auth.ts";
 import { RoomState } from "./RoomState.tsx";
 
@@ -18,6 +18,16 @@ export function RoomLayout({
 	error,
 	children,
 }: RoomLayoutProps) {
+	useEffect(() => {
+		// Cleanup when room becomes inactive
+		return () => {
+			if (!room?.isActive) {
+				// Clear any stored room data
+				localStorage.removeItem("lastVisitedRoom");
+			}
+		};
+	}, [room?.isActive]);
+
 	if (isLoading) {
 		return (
 			<div className="min-h-screen bg-[#161616] flex items-center justify-center">

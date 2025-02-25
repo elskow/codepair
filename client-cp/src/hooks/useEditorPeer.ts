@@ -7,6 +7,7 @@ interface EditorPeerHook {
 	language: string;
 	handleEditorChange: (value: string | undefined) => void;
 	handleLanguageChange: (event: React.ChangeEvent<HTMLSelectElement>) => void;
+	cleanup: () => void;
 }
 
 const useEditorPeer = (
@@ -19,23 +20,23 @@ const useEditorPeer = (
 	const [language, setLanguage] = useState("javascript");
 	const prevCodeRef = useRef(code);
 
+	const handleMessage = useCallback((event: MessageEvent) => {
+		try {
+			const message = JSON.parse(event.data) as EditorMessage;
+			if (message.type === "code" || message.type === "sync") {
+				setCode(message.code);
+				setLanguage(message.language);
+			}
+		} catch (err) {
+			console.error("Failed to parse WebSocket message:", err);
+		}
+	}, []);
+
 	useEffect(() => {
 		if (!url || !token) return;
 
 		const socket = new WebSocket(`${url}/${roomId}?token=${token}`);
 		setWs(socket);
-
-		const handleMessage = (event: MessageEvent) => {
-			try {
-				const message = JSON.parse(event.data) as EditorMessage;
-				if (message.type === "code" || message.type === "sync") {
-					setCode(message.code);
-					setLanguage(message.language);
-				}
-			} catch (err) {
-				console.error("Failed to parse WebSocket message:", err);
-			}
-		};
 
 		socket.addEventListener("message", handleMessage);
 
@@ -43,7 +44,7 @@ const useEditorPeer = (
 			socket.removeEventListener("message", handleMessage);
 			socket.close();
 		};
-	}, [url, roomId, token]);
+	}, [url, roomId, token, handleMessage]);
 
 	const sendUpdate = useCallback(
 		(newCode: string, newLanguage: string) => {
@@ -80,7 +81,21 @@ const useEditorPeer = (
 		[code, sendUpdate],
 	);
 
-	return { code, language, handleEditorChange, handleLanguageChange };
+	const cleanup = useCallback(() => {
+		if (ws) {
+			ws.removeEventListener("message", handleMessage);
+			ws.close();
+			setWs(null);
+		}
+	}, [ws, handleMessage]);
+
+	return {
+		code,
+		language,
+		handleEditorChange,
+		handleLanguageChange,
+		cleanup,
+	};
 };
 
 export default useEditorPeer;

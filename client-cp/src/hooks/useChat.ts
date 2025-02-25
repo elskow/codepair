@@ -1,11 +1,12 @@
-import {useEffect, useRef, useState} from "react";
-import type {ChatMessage} from "../types/chat";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { ChatMessage } from "../types/chat";
 
 interface ChatHook {
 	messages: ChatMessage[];
 	isLoading: boolean;
 	error: Error | null;
 	sendMessage: (content: string) => void;
+	cleanup: () => void;
 }
 
 export const useChat = (
@@ -19,53 +20,65 @@ export const useChat = (
 	const [error, setError] = useState<Error | null>(null);
 	const ws = useRef<WebSocket | null>(null);
 	const reconnectTimeout = useRef<NodeJS.Timeout>();
+	const isComponentMounted = useRef(true); // Add this ref
 
 	useEffect(() => {
+		isComponentMounted.current = true; // Set on mount
+
 		if (!url || !token) return;
 
 		const connectWebSocket = () => {
 			try {
-				const socket = new WebSocket(`${url}/chat/${roomId}?token=${token}`);
+				const socket = new WebSocket(`${url}/${roomId}?token=${token}`);
 				ws.current = socket;
 
 				socket.onopen = () => {
-					console.log("Chat WebSocket Connected");
-					setIsLoading(false);
+					if (isComponentMounted.current) {
+						setIsLoading(false);
+					}
 				};
 
 				socket.onmessage = (event) => {
-					const data = JSON.parse(event.data);
-					if (data.type === "chat") {
-						setMessages((prev) => [...prev, data.message]);
-					} else if (data.type === "history") {
-						setMessages(data.messages || []);
+					if (isComponentMounted.current) {
+						const data = JSON.parse(event.data);
+						if (data.type === "chat") {
+							setMessages((prev) => [...prev, data.message]);
+						} else if (data.type === "history") {
+							setMessages(data.messages || []);
+						}
 					}
 				};
 
 				socket.onclose = () => {
-					console.log("Chat WebSocket Disconnected");
-					ws.current = null;
-					// Attempt to reconnect after 3 seconds
-					reconnectTimeout.current = setTimeout(connectWebSocket, 3000);
+					if (isComponentMounted.current) {
+						ws.current = null;
+						reconnectTimeout.current = setTimeout(connectWebSocket, 3000);
+					}
 				};
 
 				socket.onerror = (error) => {
-					console.error("Chat WebSocket Error:", error);
-					setError(new Error("Failed to connect to chat"));
+					if (isComponentMounted.current) {
+						console.error("Chat WebSocket Error:", error);
+						setError(new Error("Failed to connect to chat"));
+					}
 				};
 			} catch (err) {
-				setError(
-					err instanceof Error ? err : new Error("Failed to connect to chat"),
-				);
-				setIsLoading(false);
+				if (isComponentMounted.current) {
+					setError(
+						err instanceof Error ? err : new Error("Failed to connect to chat"),
+					);
+					setIsLoading(false);
+				}
 			}
 		};
 
 		connectWebSocket();
 
 		return () => {
+			isComponentMounted.current = false;
 			if (ws.current) {
 				ws.current.close();
+				ws.current = null;
 			}
 			if (reconnectTimeout.current) {
 				clearTimeout(reconnectTimeout.current);
@@ -88,10 +101,25 @@ export const useChat = (
 		ws.current.send(JSON.stringify(chatEvent));
 	};
 
+	const cleanup = useCallback(() => {
+		isComponentMounted.current = false;
+		if (ws.current) {
+			ws.current.close();
+			ws.current = null;
+		}
+		if (reconnectTimeout.current) {
+			clearTimeout(reconnectTimeout.current);
+		}
+		setMessages([]);
+		setIsLoading(true);
+		setError(null);
+	}, []);
+
 	return {
 		messages,
 		isLoading,
 		error,
 		sendMessage,
+		cleanup,
 	};
 };

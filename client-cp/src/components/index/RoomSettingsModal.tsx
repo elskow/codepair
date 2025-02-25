@@ -1,8 +1,15 @@
-import {Calendar, Check, ChevronDown, ChevronUp, Trash2, X,} from "lucide-react";
+import {
+	Calendar,
+	Check,
+	ChevronDown,
+	ChevronUp,
+	Trash2,
+	X,
+} from "lucide-react";
 import type React from "react";
-import {useState} from "react";
-import type {Room, RoomSettings} from "../../types/auth.ts";
-import {ConfirmationModal} from "../common/ConfirmationModal.tsx";
+import { useState } from "react";
+import type { Room, RoomSettings } from "../../types/auth.ts";
+import { ConfirmationModal } from "../common/ConfirmationModal.tsx";
 
 interface RoomSettingsModalProps {
 	room: Room;

@@ -1,8 +1,9 @@
-import {useCallback, useEffect, useRef, useState} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface NotesPeerHook {
 	content: string;
 	handleContentChange: (text: string, html: string) => void;
+	cleanup: () => void;
 }
 
 interface NotesMessage {
@@ -16,53 +17,46 @@ const useNotesPeer = (
 	roomId: string,
 	token: string | null,
 ): NotesPeerHook => {
-	const [_, setWs] = useState<WebSocket | null>(null);
 	const [content, setContent] = useState("");
 	const prevContentRef = useRef(content);
 	const reconnectTimeout = useRef<NodeJS.Timeout>();
 	const wsRef = useRef<WebSocket | null>(null);
+	const isComponentMounted = useRef(true);
 
 	useEffect(() => {
+		isComponentMounted.current = true;
+
 		if (!url || !token) return;
 
 		const connectWebSocket = () => {
 			try {
-				console.log("Connecting to notes WebSocket...");
-				const socket = new WebSocket(`${url}/notes/${roomId}?token=${token}`);
+				const socket = new WebSocket(`${url}/${roomId}?token=${token}`);
 				wsRef.current = socket;
-				setWs(socket);
-
-				socket.onopen = () => {
-					console.log("Notes WebSocket Connected");
-				};
 
 				socket.onmessage = (event) => {
-					try {
-						const message = JSON.parse(event.data) as NotesMessage;
-						console.log("Received notes message:", message);
-
-						if (message.type === "content" || message.type === "sync") {
-							setContent(message.html);
-							prevContentRef.current = message.html;
+					if (isComponentMounted.current) {
+						try {
+							const message = JSON.parse(event.data) as NotesMessage;
+							if (message.type === "content" || message.type === "sync") {
+								setContent(message.html);
+							}
+						} catch (err) {
+							console.error("Failed to parse notes WebSocket message:", err);
 						}
-					} catch (err) {
-						console.error("Failed to parse notes WebSocket message:", err);
 					}
 				};
 
 				socket.onclose = () => {
-					console.log("Notes WebSocket Disconnected");
-					wsRef.current = null;
-					setWs(null);
-
-					if (reconnectTimeout.current) {
-						clearTimeout(reconnectTimeout.current);
+					if (isComponentMounted.current) {
+						wsRef.current = null;
+						reconnectTimeout.current = setTimeout(connectWebSocket, 3000);
 					}
-					reconnectTimeout.current = setTimeout(connectWebSocket, 3000);
 				};
 
 				socket.onerror = (error) => {
-					console.error("Notes WebSocket Error:", error);
+					if (isComponentMounted.current) {
+						console.error("Notes WebSocket Error:", error);
+					}
 				};
 			} catch (err) {
 				console.error("Failed to connect to notes WebSocket:", err);
@@ -72,6 +66,7 @@ const useNotesPeer = (
 		connectWebSocket();
 
 		return () => {
+			isComponentMounted.current = false;
 			if (wsRef.current) {
 				wsRef.current.close();
 				wsRef.current = null;
@@ -84,7 +79,6 @@ const useNotesPeer = (
 
 	const handleContentChange = useCallback((text: string, html: string) => {
 		if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-			console.log("WebSocket not ready, cannot send update");
 			return;
 		}
 
@@ -93,15 +87,26 @@ const useNotesPeer = (
 			content: text,
 			html: html,
 		};
-
-		console.log("Sending notes update:", message);
 		wsRef.current.send(JSON.stringify(message));
 		prevContentRef.current = html;
+	}, []);
+
+	const cleanup = useCallback(() => {
+		isComponentMounted.current = false;
+		if (wsRef.current) {
+			wsRef.current.close();
+			wsRef.current = null;
+		}
+		if (reconnectTimeout.current) {
+			clearTimeout(reconnectTimeout.current);
+		}
+		setContent("");
 	}, []);
 
 	return {
 		content,
 		handleContentChange,
+		cleanup,
 	};
 };
 

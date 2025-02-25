@@ -1,5 +1,5 @@
-import type {Room} from "../../types/auth";
-import {RoomItem} from "./RoomItem.tsx";
+import type { Room } from "../../types/auth";
+import { RoomItem } from "./RoomItem.tsx";
 
 interface RoomListProps {
 	rooms: Room[];
