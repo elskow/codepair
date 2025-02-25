@@ -4,8 +4,20 @@ import Placeholder from "@tiptap/extension-placeholder";
 import {EditorContent, useEditor} from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import {Bold, Code as CodeIcon, Italic, List, Quote} from "lucide-react";
+import type React from "react";
+import {useEffect, useRef} from "react";
+import useNotesPeer from "../../hooks/useNotesPeer";
 
-const WriteSpace = () => {
+interface WriteSpaceProps {
+	roomId: string;
+	token: string | null;
+}
+
+const WriteSpace = ({ roomId, token }: WriteSpaceProps) => {
+	const url = import.meta.env.VITE_WS_URL || "ws://localhost:8001";
+	const { content, handleContentChange } = useNotesPeer(url, roomId, token);
+	const isLocalUpdate = useRef(false);
+
 	const editor = useEditor({
 		extensions: [
 			StarterKit,
@@ -15,13 +27,28 @@ const WriteSpace = () => {
 			CodeBlock,
 			Code,
 		],
+		content: content,
 		editorProps: {
 			attributes: {
 				class:
-					"prose prose-invert max-w-none prose-sm font-[IBM Plex Sans] focus:outline-none",
+					"prose prose-invert max-w-none prose-sm font-[IBM Plex Sans] focus:outline-none custom-scrollbar",
 			},
 		},
+		onTransaction: ({ editor }) => {
+			if (isLocalUpdate.current) return;
+			isLocalUpdate.current = true;
+			handleContentChange(editor.getText(), editor.getHTML());
+			isLocalUpdate.current = false;
+		},
 	});
+
+	useEffect(() => {
+		if (editor && content && !isLocalUpdate.current) {
+			isLocalUpdate.current = true;
+			editor.commands.setContent(content, false);
+			isLocalUpdate.current = false;
+		}
+	}, [editor, content]);
 
 	const MenuButton = ({
 		onClick,
@@ -87,7 +114,7 @@ const WriteSpace = () => {
 				</div>
 			</div>
 
-			<div className="flex-1 p-4 overflow-y-auto">
+			<div className="flex-1 p-4 overflow-y-auto custom-scrollbar">
 				<EditorContent editor={editor} className="h-full text-[#f4f4f4]" />
 			</div>
 		</div>

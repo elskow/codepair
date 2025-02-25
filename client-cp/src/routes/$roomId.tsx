@@ -310,7 +310,7 @@ function RoomComponent() {
 							style={{ width: isMobile ? "100%" : `${100 - editorWidth}%` }}
 							className={`relative min-w-[30%] ${isMobile ? "h-1/2" : "h-full"} border-b md:border-b-0 md:border-r border-[#393939] bg-[#161616]`}
 						>
-							<WriteSpace />
+							<WriteSpace roomId={roomId} token={room?.token ?? null} />
 
 							{/* Resizer */}
 							{!isMobile && (
