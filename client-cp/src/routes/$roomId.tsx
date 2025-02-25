@@ -146,12 +146,21 @@ function RoomComponent() {
 				return;
 			}
 
-			// Case 3: No token or auth
+			// Case 3: No token - check if we should wait for auth
+			const storedRoomId = localStorage.getItem("lastVisitedRoom");
+			if (storedRoomId === roomId) {
+				// Don't redirect yet, wait for auth to complete
+				return;
+			}
 			throw new Error("Authentication required");
 		} catch (err) {
 			setError(err instanceof Error ? err : new Error("Failed to load room"));
 			if (!isAuthenticated) {
-				await navigate({ to: "/login" });
+				// Only redirect if this isn't the last visited room
+				const storedRoomId = localStorage.getItem("lastVisitedRoom");
+				if (storedRoomId !== roomId) {
+					await navigate({ to: "/login" });
+				}
 			}
 		} finally {
 			setIsLoading(false);
@@ -169,8 +178,16 @@ function RoomComponent() {
 	};
 
 	useEffect(() => {
+		if (
+			!isAuthenticated &&
+			localStorage.getItem("lastVisitedRoom") === roomId
+		) {
+			// If this is the last visited room and we're not authenticated yet,
+			// don't initialize until authentication is complete
+			return;
+		}
 		initializeRoom().then((r) => console.debug("Room initialized:", r));
-	}, [initializeRoom]);
+	}, [initializeRoom, isAuthenticated, roomId]);
 
 	useEffect(() => {
 		const handleResize = () => {
@@ -185,6 +202,20 @@ function RoomComponent() {
 		window.addEventListener("resize", handleResize);
 		return () => window.removeEventListener("resize", handleResize);
 	}, []);
+
+	useEffect(() => {
+		// Save current room ID when entering
+		if (room?.isActive && isAuthenticated) {
+			localStorage.setItem("lastVisitedRoom", roomId);
+		}
+
+		return () => {
+			// Clean up when leaving the room
+			if (!room?.isActive) {
+				localStorage.removeItem("lastVisitedRoom");
+			}
+		};
+	}, [room?.isActive, roomId, isAuthenticated]);
 
 	// Check if the user is allowed to end the interview
 	const showEndButton = !isCandidate && isAuthenticated && room?.isActive;

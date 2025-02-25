@@ -32,8 +32,18 @@ function Index() {
 	} = useRooms();
 
 	useEffect(() => {
-		if (!isLoadingAuth && !isAuthenticated) {
-			navigate({ to: "/login" });
+		if (!isLoadingAuth) {
+			if (!isAuthenticated) {
+				navigate({ to: "/login" });
+			} else {
+				// Check for last visited room
+				const lastVisitedRoom = localStorage.getItem("lastVisitedRoom");
+				if (lastVisitedRoom) {
+					navigate({ to: `/${lastVisitedRoom}` });
+					// Optionally clear the stored room ID
+					// localStorage.removeItem('lastVisitedRoom');
+				}
+			}
 		}
 	}, [isLoadingAuth, isAuthenticated, navigate]);
 
