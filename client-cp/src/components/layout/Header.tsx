@@ -1,4 +1,4 @@
-import {useNavigate} from "@tanstack/react-router";
+import {Link, useRouter} from "@tanstack/react-router"; // Change this line
 import {LogOut, Menu, UserCircle, X} from "lucide-react";
 import {useToast} from "../../context/ToastContext.tsx";
 import type {User} from "../../types/auth";
@@ -14,8 +14,12 @@ export function Header({
 	isMobileMenuOpen,
 	setIsMobileMenuOpen,
 }: HeaderProps) {
-	const navigate = useNavigate();
 	const { show } = useToast();
+	const router = useRouter();
+
+	const currentRoute = router.state.location.pathname;
+	const isDashboardActive = currentRoute === "/";
+	const isSettingsActive = currentRoute === "/settings";
 
 	const handleLogout = () => {
 		localStorage.removeItem("token");
@@ -24,26 +28,35 @@ export function Header({
 			message: "You have been successfully logged out",
 			duration: 2000,
 		});
-		navigate({ to: "/login" });
 	};
 
 	return (
 		<header className="h-12 bg-[#262626] border-b border-[#393939] flex items-center justify-between px-4">
 			<div className="flex items-center gap-8">
 				<h1 className="text-[#f4f4f4] text-sm font-normal">CodePair</h1>
-				<nav className="hidden md:flex items-center gap-4">
-					<button
-						type="button"
-						className="text-sm text-[#f4f4f4] hover:text-[#f4f4f4] hover:bg-[#353535] px-3 py-1.5 rounded-none transition-colors"
+				<nav className="hidden md:flex items-center h-12">
+					<Link
+						to="/"
+						className={`h-full flex items-center px-3 text-sm relative transition-colors
+              ${
+								isDashboardActive
+									? "text-[#f4f4f4] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-[#f4f4f4]"
+									: "text-[#8d8d8d] hover:text-[#c6c6c6]"
+							}`}
 					>
 						Dashboard
-					</button>
-					<button
-						type="button"
-						className="text-sm text-[#8d8d8d] hover:text-[#f4f4f4] hover:bg-[#353535] px-3 py-1.5 rounded-none transition-colors"
+					</Link>
+					<Link
+						to="/settings"
+						className={`h-full flex items-center px-3 text-sm relative transition-colors
+              ${
+								isSettingsActive
+									? "text-[#f4f4f4] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-[#f4f4f4]"
+									: "text-[#8d8d8d] hover:text-[#c6c6c6]"
+							}`}
 					>
 						Settings
-					</button>
+					</Link>
 				</nav>
 			</div>
 

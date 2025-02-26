@@ -63,3 +63,17 @@
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
 	background-color: #6f6f6f;
 }
+
+select option {
+	background-color: #262626;
+	color: #f4f4f4;
+	padding: 8px;
+}
+
+select option:hover {
+	background-color: #353535;
+}
+
+select:focus + .absolute {
+	color: #f4f4f4;
+}

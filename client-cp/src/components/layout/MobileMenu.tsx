@@ -1,10 +1,14 @@
-import {useNavigate} from "@tanstack/react-router";
+import {Link, useRouter} from "@tanstack/react-router";
 import {LogOut} from "lucide-react";
 import {useToast} from "../../context/ToastContext.tsx";
 
 export function MobileMenu() {
-	const navigate = useNavigate();
 	const { show } = useToast();
+	const router = useRouter();
+
+	const currentRoute = router.state.location.pathname;
+	const isDashboardActive = currentRoute === "/";
+	const isSettingsActive = currentRoute === "/settings";
 
 	const handleLogout = () => {
 		localStorage.removeItem("token");
@@ -13,29 +17,38 @@ export function MobileMenu() {
 			message: "You have been successfully logged out",
 			duration: 2000,
 		});
-		navigate({ to: "/login" });
 	};
 
 	return (
 		<div className="md:hidden bg-[#262626] border-b border-[#393939]">
-			<nav className="flex flex-col p-4 space-y-2">
-				<button
-					type="button"
-					className="text-sm text-[#f4f4f4] hover:bg-[#353535] px-3 py-2 w-full text-left"
+			<nav className="flex flex-col">
+				<Link
+					to="/"
+					className={`flex items-center h-12 px-4 text-sm border-l-2 transition-colors
+            ${
+							isDashboardActive
+								? "text-[#f4f4f4] bg-[#353535] border-[#f4f4f4]"
+								: "text-[#8d8d8d] hover:text-[#c6c6c6] border-transparent"
+						}`}
 				>
 					Dashboard
-				</button>
-				<button
-					type="button"
-					className="text-sm text-[#8d8d8d] hover:bg-[#353535] px-3 py-2 w-full text-left"
+				</Link>
+				<Link
+					to="/settings"
+					className={`flex items-center h-12 px-4 text-sm border-l-2 transition-colors
+            ${
+							isSettingsActive
+								? "text-[#f4f4f4] bg-[#353535] border-[#f4f4f4]"
+								: "text-[#8d8d8d] hover:text-[#c6c6c6] border-transparent"
+						}`}
 				>
 					Settings
-				</button>
-				<div className="pt-2 border-t border-[#393939]">
+				</Link>
+				<div className="px-4 py-3 border-t border-[#393939]">
 					<button
 						type="button"
 						onClick={handleLogout}
-						className="text-sm text-[#fa4d56] hover:bg-[#353535] px-3 py-2 w-full text-left flex items-center gap-2"
+						className="flex items-center gap-2 w-full text-sm text-[#fa4d56] hover:text-[#ff8389] transition-colors"
 					>
 						<LogOut size={16} />
 						Logout
