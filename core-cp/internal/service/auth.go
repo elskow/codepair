@@ -79,6 +79,115 @@ func (s *authService) ValidateToken(ctx context.Context, tokenString string) (*d
 	return s.userRepo.FindByID(ctx, userID)
 }
 
+func (s *authService) UpdateProfile(ctx context.Context, userID uuid.UUID, name string) error {
+	updates := map[string]interface{}{
+		"name": name,
+	}
+	return s.userRepo.UpdateProfile(ctx, userID, updates)
+}
+
+func (s *authService) UpdatePassword(ctx context.Context, userID uuid.UUID, currentPassword, newPassword string) error {
+	user, err := s.userRepo.FindByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+
+	if !utils.CheckPassword(currentPassword, user.Password) {
+		return errors.New("current password is incorrect")
+	}
+
+	hashedPassword, err := utils.HashPassword(newPassword)
+	if err != nil {
+		return err
+	}
+
+	return s.userRepo.UpdatePassword(ctx, userID, hashedPassword)
+}
+
+func (s *authService) CreateInterviewer(ctx context.Context, adminID uuid.UUID, newUser *domain.User) error {
+	admin, err := s.userRepo.FindByID(ctx, adminID)
+	if err != nil {
+		return err
+	}
+
+	if admin.Role != "lead" {
+		return errors.New("unauthorized: only lead interviewers can create new interviewers")
+	}
+
+	hashedPassword, err := utils.HashPassword(newUser.Password)
+	if err != nil {
+		return err
+	}
+
+	newUser.Password = hashedPassword
+	return s.userRepo.Create(ctx, newUser)
+}
+
+func (s *authService) UpdateInterviewerRole(ctx context.Context, adminID, userID uuid.UUID, role string) error {
+	admin, err := s.userRepo.FindByID(ctx, adminID)
+	if err != nil {
+		return err
+	}
+
+	if admin.Role != "lead" {
+		return errors.New("unauthorized: only lead interviewers can update roles")
+	}
+
+	if role != "interviewer" && role != "lead" {
+		return errors.New("invalid role")
+	}
+
+	return s.userRepo.UpdateRole(ctx, userID, role)
+}
+
+func (s *authService) UpdateInterviewerStatus(ctx context.Context, adminID, userID uuid.UUID, isActive bool) error {
+	admin, err := s.userRepo.FindByID(ctx, adminID)
+	if err != nil {
+		return err
+	}
+
+	if admin.Role != "lead" {
+		return errors.New("unauthorized: only lead interviewers can update status")
+	}
+
+	return s.userRepo.UpdateStatus(ctx, userID, isActive)
+}
+
+func (s *authService) ListInterviewers(ctx context.Context, adminID uuid.UUID) ([]domain.User, error) {
+	admin, err := s.userRepo.FindByID(ctx, adminID)
+	if err != nil {
+		return nil, err
+	}
+
+	if admin.Role != "lead" {
+		return nil, errors.New("unauthorized: only lead interviewers can list interviewers")
+	}
+
+	return s.userRepo.ListInterviewers(ctx)
+}
+
+func (s *authService) DeleteInterviewer(ctx context.Context, adminID, userID uuid.UUID) error {
+	admin, err := s.userRepo.FindByID(ctx, adminID)
+	if err != nil {
+		return err
+	}
+
+	if admin.Role != "lead" {
+		return errors.New("unauthorized: only lead interviewers can delete interviewers")
+	}
+
+	if adminID == userID {
+		return errors.New("cannot delete yourself")
+	}
+
+	_, err = s.userRepo.FindByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+
+	return s.userRepo.DeleteInterviewer(ctx, userID)
+}
+
 func (s *authService) generateToken(user *domain.User, expiry time.Duration) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"userId": user.ID.String(),

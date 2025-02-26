@@ -12,6 +12,8 @@ type User struct {
 	Email     string    `gorm:"unique;not null"`
 	Password  string    `gorm:"not null"`
 	Name      string    `gorm:"not null"`
+	Role      string    `gorm:"type:varchar(20);default:'interviewer'"`
+	IsActive  bool      `gorm:"default:true"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }

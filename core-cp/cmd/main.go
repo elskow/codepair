@@ -45,6 +45,19 @@ func setupRouter(
 		auth.GET("/me", middleware.RequireAuth(authService), authHandler.GetCurrentUser)
 	}
 
+	users := r.Group("/users")
+	users.Use(middleware.RequireAuth(authService))
+	{
+		users.PATCH("/profile", authHandler.UpdateProfile)
+		users.PATCH("/password", authHandler.UpdatePassword)
+
+		// Admin/Lead routes
+		users.POST("/interviewers", authHandler.CreateInterviewer)
+		users.GET("/interviewers", authHandler.ListInterviewers)
+		users.PATCH("/interviewers/:id", authHandler.UpdateInterviewer)
+		users.DELETE("/interviewers/:id", authHandler.DeleteInterviewer)
+	}
+
 	rooms := r.Group("/rooms")
 	{
 		rooms.GET("/join", roomHandler.JoinRoom)

@@ -63,6 +63,8 @@ func CreateInitialUser(db *gorm.DB) error {
 			Email:    "admin@codepair.com",
 			Password: hashedPassword,
 			Name:     "Admin Interviewer",
+			Role:     "lead",
+			IsActive: true,
 		}
 
 		if err := db.Create(initialUser).Error; err != nil {
