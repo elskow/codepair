@@ -1,15 +1,15 @@
-import {createLazyFileRoute, useNavigate} from "@tanstack/react-router";
-import {useEffect, useState} from "react";
-import {CreateRoomForm} from "../components/index/CreateRoomForm";
-import {RoomList} from "../components/index/RoomList";
-import {RoomSearch} from "../components/index/RoomSearch";
-import {RoomSettingsModal} from "../components/index/RoomSettingsModal.tsx";
-import {Header} from "../components/layout/Header";
-import {MobileMenu} from "../components/layout/MobileMenu";
-import {useToast} from "../context/ToastContext.tsx";
-import {useAuth} from "../hooks/useAuth";
-import {useRooms} from "../hooks/useRooms";
-import type {Room, RoomSettings} from "../types/auth";
+import { createLazyFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { CreateRoomForm } from "../components/index/CreateRoomForm";
+import { RoomList } from "../components/index/RoomList";
+import { RoomSearch } from "../components/index/RoomSearch";
+import { RoomSettingsModal } from "../components/index/RoomSettingsModal.tsx";
+import { Header } from "../components/layout/Header";
+import { MobileMenu } from "../components/layout/MobileMenu";
+import { useToast } from "../context/ToastContext.tsx";
+import { useAuth } from "../hooks/useAuth";
+import { useRooms } from "../hooks/useRooms";
+import type { Room, RoomSettings } from "../types/auth";
 
 export const Route = createLazyFileRoute("/")({
 	component: Index,

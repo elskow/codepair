@@ -1,17 +1,20 @@
-import {useState} from "react";
-import {useAuth} from "../../hooks/useAuth";
-import {Header} from "../layout/Header";
-import {MobileMenu} from "../layout/MobileMenu";
-import {CreateInterviewerModal} from "./CreateInterviewerModal";
-import {InterviewerList} from "./InterviewerList";
-import {UserProfileCard} from "./UserProfileCard";
-import {UserSettingsModal} from "./UserSettingsModal";
+import { Plus } from "lucide-react";
+import { useState } from "react";
+import { useAuth } from "../../hooks/useAuth";
+import { Header } from "../layout/Header";
+import { MobileMenu } from "../layout/MobileMenu";
+import { CreateInterviewerModal } from "./CreateInterviewerModal";
+import { InterviewerList } from "./InterviewerList";
+import { UserProfileCard } from "./UserProfileCard";
+import { UserSettingsModal } from "./UserSettingsModal";
 
 export function Settings() {
 	const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 	const [isUserSettingsOpen, setIsUserSettingsOpen] = useState(false);
 	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 	const { user } = useAuth();
+
+	const isLead = user?.role === "lead";
 
 	return (
 		<div className="min-h-screen bg-[#161616]">
@@ -29,7 +32,9 @@ export function Settings() {
 						Settings
 					</h2>
 					<p className="text-[#8d8d8d] text-sm sm:text-base">
-						Manage interviewer accounts and system preferences
+						{isLead
+							? "Manage interviewer accounts and system preferences"
+							: "Manage your account preferences"}
 					</p>
 				</div>
 
@@ -48,22 +53,25 @@ export function Settings() {
 						/>
 					</section>
 
-					{/* Interviewers Section */}
-					<section>
-						<div className="flex items-center justify-between mb-4">
-							<h3 className="text-[#f4f4f4] text-lg font-medium">
-								Interviewer Accounts
-							</h3>
-							<button
-								type="button"
-								onClick={() => setIsCreateModalOpen(true)}
-								className="h-10 px-4 bg-[#0f62fe] text-white text-sm hover:bg-[#0353e9] focus:outline-2 focus:outline-offset-2 focus:outline-[#ffffff] active:bg-[#002d9c] transition-colors"
-							>
-								Add Interviewer
-							</button>
-						</div>
-						<InterviewerList />
-					</section>
+					{/* Interviewers Section - Only shown to lead interviewers */}
+					{isLead && (
+						<section>
+							<div className="flex items-center justify-between mb-4">
+								<h3 className="text-[#f4f4f4] text-lg font-medium">
+									Interviewer Accounts
+								</h3>
+								<button
+									type="button"
+									onClick={() => setIsCreateModalOpen(true)}
+									className="h-10 px-4 bg-[#0f62fe] text-white text-sm hover:bg-[#0353e9] focus:outline-2 focus:outline-offset-2 focus:outline-[#ffffff] active:bg-[#002d9c] transition-colors flex items-center gap-2"
+								>
+									<Plus size={16} />
+									<span>Add Interviewer</span>
+								</button>
+							</div>
+							<InterviewerList />
+						</section>
+					)}
 				</div>
 			</main>
 

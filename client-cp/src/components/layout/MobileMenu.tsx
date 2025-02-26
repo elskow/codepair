@@ -1,8 +1,9 @@
-import {Link, useRouter} from "@tanstack/react-router";
-import {LogOut} from "lucide-react";
-import {useToast} from "../../context/ToastContext.tsx";
+import { Link, useNavigate, useRouter } from "@tanstack/react-router";
+import { LogOut } from "lucide-react";
+import { useToast } from "../../context/ToastContext.tsx";
 
 export function MobileMenu() {
+	const navigate = useNavigate();
 	const { show } = useToast();
 	const router = useRouter();
 
@@ -17,6 +18,7 @@ export function MobileMenu() {
 			message: "You have been successfully logged out",
 			duration: 2000,
 		});
+		navigate({ to: "/login" });
 	};
 
 	return (

@@ -1,7 +1,9 @@
-import {Eye, EyeOff, X} from "lucide-react";
-import {useState} from "react";
-import type {User} from "../../types/auth";
-import {ConfirmationModal} from "../common/ConfirmationModal";
+import { Eye, EyeOff, X } from "lucide-react";
+import { useState } from "react";
+import type { User } from "../../types/auth";
+import { ConfirmationModal } from "../common/ConfirmationModal";
+import { apiClient } from "../../services/apiClient";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 interface UserSettingsModalProps {
 	user: User | undefined;
@@ -10,6 +12,7 @@ interface UserSettingsModalProps {
 
 export function UserSettingsModal({ user, onClose }: UserSettingsModalProps) {
 	const [isSubmitting, setIsSubmitting] = useState(false);
+	const queryClient = useQueryClient();
 	const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
 	const [showCancelConfirmation, setShowCancelConfirmation] = useState(false);
 	const [formData, setFormData] = useState({
@@ -21,18 +24,75 @@ export function UserSettingsModal({ user, onClose }: UserSettingsModalProps) {
 		showNewPassword: false,
 	});
 
+	const hasChanges = (data: typeof formData): boolean => {
+		const nameChanged = data.name !== user?.name;
+
+		const hasPasswordChanges = !!(
+			data.currentPassword ||
+			data.newPassword ||
+			data.confirmPassword
+		);
+
+		return nameChanged || hasPasswordChanges;
+	};
+
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
+
+		if (!hasChanges(formData)) {
+			onClose();
+			return;
+		}
+
 		setShowSaveConfirmation(true);
 	};
 
+	const handleCancelClick = () => {
+		if (hasChanges(formData)) {
+			setShowCancelConfirmation(true);
+		} else {
+			onClose();
+		}
+	};
+
+	const updateProfileMutation = useMutation({
+		mutationFn: async (data: { name: string }) =>
+			apiClient.patch("/users/profile", data),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["user"] });
+		},
+	});
+
+	const updatePasswordMutation = useMutation({
+		mutationFn: async (data: {
+			currentPassword: string;
+			newPassword: string;
+		}) => apiClient.patch("/users/password", data),
+	});
+
 	const handleConfirmSave = async () => {
 		setIsSubmitting(true);
-		// Implement save logic here
-		setTimeout(() => {
-			setIsSubmitting(false);
+		try {
+			if (formData.name !== user?.name) {
+				await updateProfileMutation.mutateAsync({ name: formData.name });
+			}
+
+			if (formData.currentPassword && formData.newPassword) {
+				if (formData.newPassword !== formData.confirmPassword) {
+					throw new Error("New passwords don't match");
+				}
+				await updatePasswordMutation.mutateAsync({
+					currentPassword: formData.currentPassword,
+					newPassword: formData.newPassword,
+				});
+			}
+
 			onClose();
-		}, 1000);
+		} catch (error) {
+			console.error("Failed to save changes:", error);
+		} finally {
+			setIsSubmitting(false);
+		}
 	};
 
 	return (
@@ -52,7 +112,7 @@ export function UserSettingsModal({ user, onClose }: UserSettingsModalProps) {
 								</div>
 								<button
 									type="button"
-									onClick={() => setShowCancelConfirmation(true)}
+									onClick={handleCancelClick}
 									className="flex h-8 w-8 items-center justify-center rounded text-[#c6c6c6] hover:bg-[#353535] hover:text-[#f4f4f4]"
 								>
 									<X size={20} />
@@ -214,7 +274,7 @@ export function UserSettingsModal({ user, onClose }: UserSettingsModalProps) {
 								<div className="flex items-center space-x-3">
 									<button
 										type="button"
-										onClick={() => setShowCancelConfirmation(true)}
+										onClick={handleCancelClick}
 										className="h-10 px-4 text-sm font-normal text-[#f4f4f4] transition-all duration-150 ease-in-out hover:bg-[#353535] focus:outline-none focus:ring-2 focus:ring-[#0f62fe] focus:ring-offset-2 focus:ring-offset-[#262626] active:bg-[#4c4c4c]"
 									>
 										Cancel

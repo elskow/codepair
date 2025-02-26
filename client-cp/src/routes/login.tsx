@@ -1,8 +1,8 @@
-import {createFileRoute, useNavigate} from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import type React from "react";
-import {useState} from "react";
-import {useToast} from "../context/ToastContext.tsx";
-import {useAuth} from "../hooks/useAuth";
+import { useState } from "react";
+import { useToast } from "../context/ToastContext.tsx";
+import { useAuth } from "../hooks/useAuth";
 
 export const Route = createFileRoute("/login")({
 	component: LoginPage,

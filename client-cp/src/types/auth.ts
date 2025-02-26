@@ -1,6 +1,9 @@
 export interface User {
+	id: string;
 	email: string;
 	name: string;
+	role: "interviewer" | "lead";
+	isActive: boolean;
 }
 
 export interface LoginRequest {

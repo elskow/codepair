@@ -1,5 +1,5 @@
-import {Edit2, Mail, UserCircle} from "lucide-react";
-import type {User} from "../../types/auth";
+import { Edit2, Mail, UserCircle } from "lucide-react";
+import type { User } from "../../types/auth";
 
 interface UserProfileCardProps {
 	user: User | undefined;

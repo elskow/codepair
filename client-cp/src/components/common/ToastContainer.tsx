@@ -1,5 +1,5 @@
-import type {Toast as ToastType} from "../../types/toast";
-import {Toast} from "./Toast";
+import type { Toast as ToastType } from "../../types/toast";
+import { Toast } from "./Toast";
 
 interface ToastContainerProps {
 	toasts: ToastType[];

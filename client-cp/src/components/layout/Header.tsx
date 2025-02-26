@@ -1,7 +1,7 @@
-import {Link, useRouter} from "@tanstack/react-router"; // Change this line
-import {LogOut, Menu, UserCircle, X} from "lucide-react";
-import {useToast} from "../../context/ToastContext.tsx";
-import type {User} from "../../types/auth";
+import { Link, useNavigate, useRouter } from "@tanstack/react-router"; // Change this line
+import { LogOut, Menu, UserCircle, X } from "lucide-react";
+import { useToast } from "../../context/ToastContext.tsx";
+import type { User } from "../../types/auth";
 
 interface HeaderProps {
 	user: User | undefined;
@@ -14,6 +14,7 @@ export function Header({
 	isMobileMenuOpen,
 	setIsMobileMenuOpen,
 }: HeaderProps) {
+	const navigate = useNavigate();
 	const { show } = useToast();
 	const router = useRouter();
 
@@ -28,6 +29,7 @@ export function Header({
 			message: "You have been successfully logged out",
 			duration: 2000,
 		});
+		navigate({ to: "/login" });
 	};
 
 	return (

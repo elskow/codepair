@@ -1,6 +1,18 @@
-import {createContext, type ReactNode, useCallback, useContext, useState,} from "react";
-import {ToastContainer} from "../components/common/ToastContainer.tsx";
-import type {Toast, ToastAction, ToastActionConfig, ToastResult, ToastVariant,} from "../types/toast";
+import {
+	createContext,
+	type ReactNode,
+	useCallback,
+	useContext,
+	useState,
+} from "react";
+import { ToastContainer } from "../components/common/ToastContainer.tsx";
+import type {
+	Toast,
+	ToastAction,
+	ToastActionConfig,
+	ToastResult,
+	ToastVariant,
+} from "../types/toast";
 
 interface ToastContextValue {
 	show: (

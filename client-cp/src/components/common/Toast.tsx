@@ -1,6 +1,15 @@
-import {CheckCircle, ClipboardCheck, Network, Plus, Save, Trash2, X, XCircle,} from "lucide-react";
-import {useEffect, useState} from "react";
-import type {Toast as ToastType, ToastAction} from "../../types/toast";
+import {
+	CheckCircle,
+	ClipboardCheck,
+	Network,
+	Plus,
+	Save,
+	Trash2,
+	X,
+	XCircle,
+} from "lucide-react";
+import { useEffect, useState } from "react";
+import type { Toast as ToastType, ToastAction } from "../../types/toast";
 
 interface ToastProps extends ToastType {
 	onDismiss: (id: string) => void;

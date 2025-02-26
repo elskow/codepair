@@ -1,6 +1,7 @@
-import {ChevronDown, Eye, EyeOff, RefreshCw, X} from "lucide-react";
-import {useState} from "react";
-import {ConfirmationModal} from "../common/ConfirmationModal";
+import { ChevronDown, Eye, EyeOff, RefreshCw, X } from "lucide-react";
+import { useState } from "react";
+import { useInterviewers } from "../../hooks/useInterviewers";
+import { ConfirmationModal } from "../common/ConfirmationModal";
 
 interface CreateInterviewerModalProps {
 	onClose: () => void;
@@ -24,13 +25,23 @@ export function CreateInterviewerModal({
 	interviewer,
 	mode = "create",
 }: CreateInterviewerModalProps) {
+	const { createInterviewer, updateInterviewer } = useInterviewers();
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
 	const [showCancelConfirmation, setShowCancelConfirmation] = useState(false);
 	const [formData, setFormData] = useState({
 		name: interviewer?.name || "",
 		email: interviewer?.email || "",
-		role: interviewer?.role || "technical",
+		role: interviewer?.role || INTERVIEWER_ROLES.INTERVIEWER,
+		status: interviewer?.status || "active",
+		password: "",
+		showPassword: false,
+	});
+
+	const [initialFormData] = useState({
+		name: interviewer?.name || "",
+		email: interviewer?.email || "",
+		role: interviewer?.role || INTERVIEWER_ROLES.INTERVIEWER,
 		status: interviewer?.status || "active",
 		password: "",
 		showPassword: false,
@@ -47,18 +58,70 @@ export function CreateInterviewerModal({
 		setFormData((prev) => ({ ...prev, password }));
 	};
 
+	const hasChanges = (data: typeof formData): boolean => {
+		if (mode === "create") {
+			return !!(data.name || data.email || data.password);
+		}
+
+		return (
+			data.role !== initialFormData.role ||
+			data.status !== initialFormData.status
+		);
+	};
+
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
+
+		if (!hasChanges(formData)) {
+			onClose();
+			return;
+		}
+
 		setShowSaveConfirmation(true);
+	};
+
+	const handleCancelClick = () => {
+		if (hasChanges(formData)) {
+			setShowCancelConfirmation(true);
+		} else {
+			onClose();
+		}
 	};
 
 	const handleConfirmSave = async () => {
 		setIsSubmitting(true);
-		// Implement create/edit logic here
-		setTimeout(() => {
-			setIsSubmitting(false);
+		try {
+			if (!formData.name || !formData.email || !formData.password) {
+				throw new Error("Please fill in all required fields");
+			}
+
+			if (mode === "create") {
+				if (formData.password.length < 8) {
+					throw new Error("Password must be at least 8 characters long");
+				}
+
+				await createInterviewer({
+					name: formData.name,
+					email: formData.email,
+					password: formData.password,
+					role: formData.role as "interviewer" | "lead",
+				});
+			} else if (interviewer?.id) {
+				await updateInterviewer({
+					id: interviewer.id,
+					role: formData.role,
+					isActive: formData.status === "active",
+				});
+			}
 			onClose();
-		}, 1000);
+		} catch (error) {
+			console.error("Failed to save interviewer:", error);
+			alert(
+				error instanceof Error ? error.message : "Failed to save interviewer",
+			);
+		} finally {
+			setIsSubmitting(false);
+		}
 	};
 
 	return (
@@ -80,7 +143,7 @@ export function CreateInterviewerModal({
 								</div>
 								<button
 									type="button"
-									onClick={() => setShowCancelConfirmation(true)}
+									onClick={handleCancelClick}
 									className="flex h-8 w-8 items-center justify-center text-[#c6c6c6] hover:bg-[#353535] hover:text-[#f4f4f4]"
 								>
 									<X size={20} />
@@ -328,7 +391,7 @@ export function CreateInterviewerModal({
 								<div className="flex items-center space-x-3">
 									<button
 										type="button"
-										onClick={() => setShowCancelConfirmation(true)}
+										onClick={handleCancelClick}
 										className="h-10 px-4 text-sm text-[#f4f4f4] hover:bg-[#353535] transition-colors"
 									>
 										Cancel
